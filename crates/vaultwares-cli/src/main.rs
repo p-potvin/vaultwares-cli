@@ -10335,9 +10335,16 @@ UU conflicted.rs",
 
     #[test]
     fn colorize_unified_diff_only_colors_added_removed_content_lines() {
-        let colored = colorize_unified_diff(
-            "diff --git a/file.txt b/file.txt\nindex 1111111..2222222 100644\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+new\n unchanged",
-        );
+        let colored = colorize_unified_diff(concat!(
+            "diff --git a/file.txt b/file.txt\n",
+            "index 1111111..2222222 100644\n",
+            "--- a/file.txt\n",
+            "+++ b/file.txt\n",
+            "@@ -1 +1 @@\n",
+            "-old\n",
+            "+new\n",
+            " unchanged"
+        ));
 
         assert!(colored.contains("\x1b[31m-old\x1b[0m"));
         assert!(colored.contains("\x1b[32m+new\x1b[0m"));
