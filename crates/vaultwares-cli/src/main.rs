@@ -5348,13 +5348,39 @@ fn render_diff_report_for(cwd: &Path) -> Result<String, Box<dyn std::error::Erro
 
     let mut sections = Vec::new();
     if !staged.trim().is_empty() {
-        sections.push(format!("Staged changes:\n{}", staged.trim_end()));
+        sections.push(format!(
+            "Staged changes:\n{}",
+            colorize_unified_diff(staged.trim_end())
+        ));
     }
     if !unstaged.trim().is_empty() {
-        sections.push(format!("Unstaged changes:\n{}", unstaged.trim_end()));
+        sections.push(format!(
+            "Unstaged changes:\n{}",
+            colorize_unified_diff(unstaged.trim_end())
+        ));
     }
 
     Ok(format!("Diff\n\n{}", sections.join("\n\n")))
+}
+
+fn colorize_unified_diff(diff: &str) -> String {
+    diff.lines()
+        .map(colorize_unified_diff_line)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn colorize_unified_diff_line(line: &str) -> String {
+    if line.starts_with("+++ ") || line.starts_with("--- ") || line.starts_with("@@") {
+        return line.to_string();
+    }
+    if line.starts_with('+') {
+        return format!("\x1b[32m{line}\x1b[0m");
+    }
+    if line.starts_with('-') {
+        return format!("\x1b[31m{line}\x1b[0m");
+    }
+    line.to_string()
 }
 
 fn render_diff_json_for(cwd: &Path) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
@@ -8183,7 +8209,8 @@ fn print_help(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::
 mod tests {
     use super::{
         build_runtime_plugin_state_with_loader, build_runtime_with_plugin_state,
-        collect_session_prompt_history, create_managed_session_handle, describe_tool_progress,
+        collect_session_prompt_history, colorize_unified_diff, create_managed_session_handle,
+        describe_tool_progress,
         filter_tool_specs, format_bughunter_report, format_commit_preflight_report,
         format_commit_skipped_report, format_compact_report, format_connected_line,
         format_cost_report, format_history_timestamp, format_internal_prompt_progress_line,
@@ -10300,8 +10327,31 @@ UU conflicted.rs",
         assert!(report.contains("Staged changes:"));
         assert!(report.contains("Unstaged changes:"));
         assert!(report.contains("tracked.txt"));
+        assert!(report.contains("\x1b[32m+staged\x1b[0m"));
+        assert!(report.contains("\x1b[32m+unstaged\x1b[0m"));
 
         fs::remove_dir_all(root).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn colorize_unified_diff_only_colors_added_removed_content_lines() {
+        let colored = colorize_unified_diff(concat!(
+            "diff --git a/file.txt b/file.txt\n",
+            "index 1111111..2222222 100644\n",
+            "--- a/file.txt\n",
+            "+++ b/file.txt\n",
+            "@@ -1 +1 @@\n",
+            "-old\n",
+            "+new\n",
+            " unchanged"
+        ));
+
+        assert!(colored.contains("\x1b[31m-old\x1b[0m"));
+        assert!(colored.contains("\x1b[32m+new\x1b[0m"));
+        assert!(colored.contains("+++ b/file.txt"));
+        assert!(colored.contains("--- a/file.txt"));
+        assert!(!colored.contains("\x1b[32m+++ b/file.txt\x1b[0m"));
+        assert!(!colored.contains("\x1b[31m--- a/file.txt\x1b[0m"));
     }
 
     #[test]
