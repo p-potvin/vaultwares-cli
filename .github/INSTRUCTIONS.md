@@ -4,7 +4,9 @@
 
 VaultWares is a privacy-first technology company that builds premium SaaS products, desktop applications, browser extensions, and open-source libraries. Every project shares a single north star: protecting users from data tracking, fingerprinting, and surveillance. Projects span web apps, real-time audio tools, Windows desktop utilities, Chrome extensions, and shared UI libraries — all united by a consistent tech stack and development philosophy.
 
-These guidelines apply across the entire VaultWares umbrella. Use common sense to determine what is relevant to a given project. When in doubt, **prioritize in this order: security → correctness → performance → scalability → developer experience.**
+Our first and most important mission is **individuals' privacy**. **Security is a close second** and exists to protect privacy. **Functionality is the third pillar**: the product must stay usable for regular people. Privacy and security are related but different: privacy limits and controls data; security protects what exists. Bad actors can weaponize “security” talk to push fear-driven surveillance. We aim to **strike the balance**: strong security in service of privacy, without privacy-eroding shortcuts.
+
+These guidelines apply across the entire VaultWares umbrella. Use common sense to determine what is relevant to a given project. When in doubt, **prioritize in this order: privacy (individuals) → security → functionality/correctness → performance → scalability → developer experience.**
 
 Always follow best practices for the specific language and framework in use, but treat the rules below as the baseline.
 
@@ -246,7 +248,17 @@ correlation_id = "c" + "".join(secrets.choice(_alphabet) for _ in range(6))
 
 ---
 
+## 🕊️ Privacy Principles
+
+- **Data minimization:** Collect only what we need, for the shortest time we can. If a feature works without personal data, don’t collect it.
+- **No hidden tracking:** Do not add fingerprinting, cross-site tracking, or “silent” analytics. If we measure something, make it clear and make it optional when possible.
+- **Local-first when practical:** Prefer on-device/local storage and processing where it meets the user’s needs.
+- **Keep PII out of logs:** Logs are for debugging, not for storing personal data. Redact or avoid sensitive fields.
+- **User control:** Make it easy to view, export, and delete personal data. Defaults should protect the user even if they never touch settings.
+
 ## 🔒 Security Principles
+
+- **Privacy reminder:** Security is necessary, but it is not the same thing as privacy. Always pressure-test “security requirements” to ensure they do not introduce unnecessary tracking, data collection, or surveillance.
 
 - **OWASP Top 10 compliance:** Treat every endpoint as adversarial. Validate, sanitize, and authorize before processing.
 - **Input validation:** All user inputs must pass a Zod schema (TypeScript) or a validated model (Python/C#) before touching business logic.
@@ -320,6 +332,8 @@ Before opening a PR, confirm all applicable items:
 
 - [ ] No `any` types; all inputs and API responses are Zod-validated (TypeScript)
 - [ ] No hardcoded secrets or credentials anywhere in the diff
+- [ ] No personal data in logs or analytics by default; telemetry is opt-in and documented when used
+- [ ] No new tracking/fingerprinting introduced (including “anonymous” identifiers that can be linked back to a person)
 - [ ] SQL queries use parameterized syntax — no string interpolation
 - [ ] CorrelationId generated and propagated through logs and error responses
 - [ ] All user-visible strings are externalized via i18n (web projects)

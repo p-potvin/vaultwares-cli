@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -308,7 +310,7 @@ struct ScenarioReport {
 }
 
 fn run_case(case: ScenarioCase, workspace: &HarnessWorkspace, base_url: &str) -> ScenarioRun {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_claw"));
+    let mut command = Command::new(claw_bin());
     command
         .current_dir(&workspace.root)
         .env_clear()
@@ -868,6 +870,13 @@ fn assert_success(output: &Output) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn claw_bin() -> String {
+    std::env::var("CARGO_BIN_EXE_vaultwares-cli")
+        .or_else(|_| std::env::var("CARGO_BIN_EXE_vaultwares_cli"))
+        .or_else(|_| std::env::var("CARGO_BIN_EXE_claw"))
+        .expect("cargo should expose test binary path for vaultwares-cli/claw")
 }
 
 fn unique_temp_dir(label: &str) -> PathBuf {

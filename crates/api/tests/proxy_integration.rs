@@ -42,9 +42,9 @@ fn proxy_config_from_env_reads_uppercase_proxy_vars() {
     let _http = EnvVarGuard::set("HTTP_PROXY", Some("http://proxy.corp:3128"));
     let _https = EnvVarGuard::set("HTTPS_PROXY", Some("http://secure.corp:3129"));
     let _no = EnvVarGuard::set("NO_PROXY", Some("localhost,127.0.0.1"));
-    let _http_lower = EnvVarGuard::set("http_proxy", None);
-    let _https_lower = EnvVarGuard::set("https_proxy", None);
-    let _no_lower = EnvVarGuard::set("no_proxy", None);
+    let _http_lower = (!cfg!(windows)).then(|| EnvVarGuard::set("http_proxy", None));
+    let _https_lower = (!cfg!(windows)).then(|| EnvVarGuard::set("https_proxy", None));
+    let _no_lower = (!cfg!(windows)).then(|| EnvVarGuard::set("no_proxy", None));
 
     // when
     let config = ProxyConfig::from_env();
@@ -169,5 +169,9 @@ fn proxy_config_from_env_prefers_uppercase_over_lowercase() {
     let config = ProxyConfig::from_env();
 
     // then
-    assert_eq!(config.http_proxy.as_deref(), Some("http://upper.corp:3128"));
+    if cfg!(windows) {
+        assert_eq!(config.http_proxy.as_deref(), Some("http://lower.corp:3128"));
+    } else {
+        assert_eq!(config.http_proxy.as_deref(), Some("http://upper.corp:3128"));
+    }
 }

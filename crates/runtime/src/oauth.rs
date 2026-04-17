@@ -1,7 +1,13 @@
 use std::collections::BTreeMap;
-use std::fs::{self, File};
-use std::io::{self, Read};
+use std::fs;
+#[cfg(not(windows))]
+use std::fs::File;
+use std::io;
+#[cfg(not(windows))]
+use std::io::Read;
 use std::path::PathBuf;
+#[cfg(windows)]
+use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -325,9 +331,51 @@ pub fn parse_oauth_callback_query(query: &str) -> Result<OAuthCallbackParams, St
 }
 
 fn generate_random_token(bytes: usize) -> io::Result<String> {
+    #[cfg(windows)]
+    {
+        let script = format!(
+            "$rng=[System.Security.Cryptography.RandomNumberGenerator]::Create(); \
+             $bytes=New-Object byte[] {bytes}; \
+             $rng.GetBytes($bytes); \
+             [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')"
+        );
+        let output = Command::new("powershell")
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &script,
+            ])
+            .output()?;
+        if !output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "failed to generate random token with PowerShell (exit status: {})",
+                    output.status
+                ),
+            ));
+        }
+
+        let token = String::from_utf8(output.stdout)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let token = token.trim().to_string();
+        if token.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "powershell random token output was empty",
+            ));
+        }
+        return Ok(token);
+    }
+
+    #[cfg(not(windows))]
+    {
     let mut buffer = vec![0_u8; bytes];
     File::open("/dev/urandom")?.read_exact(&mut buffer)?;
     Ok(base64url_encode(&buffer))
+    }
 }
 
 fn credentials_home_dir() -> io::Result<PathBuf> {

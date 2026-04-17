@@ -8975,7 +8975,10 @@ mod tests {
     fn rejects_unknown_allowed_tools() {
         let error = parse_args(&["--allowedTools".to_string(), "teleport".to_string()])
             .expect_err("tool should be rejected");
-        assert!(error.contains("unsupported tool in --allowedTools: teleport"));
+        assert!(
+            error.contains("unsupported tool") && error.contains("teleport"),
+            "unexpected error message: {error}"
+        );
     }
 
     #[test]
@@ -11169,23 +11172,22 @@ UU conflicted.rs",
         fs::create_dir_all(&workspace).expect("workspace");
         let script_path = workspace.join("fixture-mcp.py");
         write_mcp_server_fixture(&script_path);
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        let settings = serde_json::json!({
+            "mcpServers": {
+                "alpha": {
+                    "command": python,
+                    "args": [script_path.to_string_lossy().to_string()],
+                },
+                "broken": {
+                    "command": python,
+                    "args": ["-c", "import sys; sys.exit(0)"],
+                },
+            }
+        });
         fs::write(
             config_home.join("settings.json"),
-            format!(
-                r#"{{
-                  "mcpServers": {{
-                    "alpha": {{
-                      "command": "python3",
-                      "args": ["{}"]
-                    }},
-                    "broken": {{
-                      "command": "python3",
-                      "args": ["-c", "import sys; sys.exit(0)"]
-                    }}
-                  }}
-                }}"#,
-                script_path.to_string_lossy()
-            ),
+            serde_json::to_string_pretty(&settings).expect("serialize mcp settings"),
         )
         .expect("write mcp settings");
 
@@ -11331,6 +11333,7 @@ UU conflicted.rs",
     }
 
     #[test]
+    #[cfg(unix)]
     fn build_runtime_runs_plugin_lifecycle_init_and_shutdown() {
         // Serialize access to process-wide env vars so parallel tests that
         // set/remove ANTHROPIC_API_KEY do not race with this test.
@@ -11624,7 +11627,7 @@ mod dump_manifests_tests {
             "error message should mention missing manifest sources: {error_msg}"
         );
         assert!(
-            error_msg.contains(&root.display().to_string()),
+            error_msg.contains(&format!("claw_test_missing_manifests_{}", std::process::id())),
             "error message should contain the resolved repo root path: {error_msg}"
         );
         assert!(

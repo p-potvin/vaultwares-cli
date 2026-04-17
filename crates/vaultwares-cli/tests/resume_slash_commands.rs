@@ -536,12 +536,19 @@ fn workspace_session(root: &Path) -> Session {
 }
 
 fn run_claw_with_env(current_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_claw"));
+    let mut command = Command::new(claw_bin());
     command.current_dir(current_dir).args(args);
     for (key, value) in envs {
         command.env(key, value);
     }
     command.output().expect("claw should launch")
+}
+
+fn claw_bin() -> String {
+    std::env::var("CARGO_BIN_EXE_vaultwares-cli")
+        .or_else(|_| std::env::var("CARGO_BIN_EXE_vaultwares_cli"))
+        .or_else(|_| std::env::var("CARGO_BIN_EXE_claw"))
+        .expect("cargo should expose test binary path for vaultwares-cli/claw")
 }
 
 fn unique_temp_dir(label: &str) -> PathBuf {

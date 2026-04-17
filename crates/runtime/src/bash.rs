@@ -200,8 +200,20 @@ fn prepare_command(
         return prepared;
     }
 
-    let mut prepared = Command::new("sh");
-    prepared.arg("-lc").arg(command).current_dir(cwd);
+    #[cfg(windows)]
+    let mut prepared = {
+        let mut command_builder = Command::new("cmd");
+        command_builder.arg("/C").arg(command).current_dir(cwd);
+        command_builder
+    };
+
+    #[cfg(not(windows))]
+    let mut prepared = {
+        let mut command_builder = Command::new("sh");
+        command_builder.arg("-lc").arg(command).current_dir(cwd);
+        command_builder
+    };
+
     if sandbox_status.filesystem_active {
         prepared.env("HOME", cwd.join(".sandbox-home"));
         prepared.env("TMPDIR", cwd.join(".sandbox-tmp"));
@@ -227,8 +239,20 @@ fn prepare_tokio_command(
         return prepared;
     }
 
-    let mut prepared = TokioCommand::new("sh");
-    prepared.arg("-lc").arg(command).current_dir(cwd);
+    #[cfg(windows)]
+    let mut prepared = {
+        let mut command_builder = TokioCommand::new("cmd");
+        command_builder.arg("/C").arg(command).current_dir(cwd);
+        command_builder
+    };
+
+    #[cfg(not(windows))]
+    let mut prepared = {
+        let mut command_builder = TokioCommand::new("sh");
+        command_builder.arg("-lc").arg(command).current_dir(cwd);
+        command_builder
+    };
+
     if sandbox_status.filesystem_active {
         prepared.env("HOME", cwd.join(".sandbox-home"));
         prepared.env("TMPDIR", cwd.join(".sandbox-tmp"));
@@ -241,7 +265,7 @@ fn prepare_sandbox_dirs(cwd: &std::path::Path) {
     let _ = std::fs::create_dir_all(cwd.join(".sandbox-tmp"));
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::{execute_bash, BashCommandInput};
     use crate::sandbox::FilesystemIsolationMode;

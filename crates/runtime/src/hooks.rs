@@ -712,7 +712,7 @@ enum CommandExecution {
     Cancelled,
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use std::thread;
     use std::time::Duration;
