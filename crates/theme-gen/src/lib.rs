@@ -27,9 +27,27 @@ pub struct ThemePalette {
 }
 
 pub const DEFAULT_THEMES: &[VaultTheme] = &[
-    VaultTheme { name: "Cyberpunk Cinder", mode: "dark", primary: "#073642", accent: "#CB4B16", slug: "cyberpunk-cinder" },
-    VaultTheme { name: "Golden Slate", mode: "dark", primary: "#4A5459", accent: "#D4AF37", slug: "golden-slate" },
-    VaultTheme { name: "Ocean Mist", mode: "light", primary: "#D3D3D3", accent: "#006994", slug: "ocean-mist" },
+    VaultTheme {
+        name: "Cyberpunk Cinder",
+        mode: "dark",
+        primary: "#073642",
+        accent: "#CB4B16",
+        slug: "cyberpunk-cinder",
+    },
+    VaultTheme {
+        name: "Golden Slate",
+        mode: "dark",
+        primary: "#4A5459",
+        accent: "#D4AF37",
+        slug: "golden-slate",
+    },
+    VaultTheme {
+        name: "Ocean Mist",
+        mode: "light",
+        primary: "#D3D3D3",
+        accent: "#006994",
+        slug: "ocean-mist",
+    },
 ];
 
 pub fn default_palettes() -> Vec<ThemePalette> {

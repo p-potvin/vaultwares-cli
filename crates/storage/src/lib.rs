@@ -74,7 +74,10 @@ impl SqliteStorage {
     pub fn open(base_dir: impl AsRef<Path>) -> Result<Self> {
         let base_dir = base_dir.as_ref();
         fs::create_dir_all(base_dir).with_context(|| {
-            format!("failed to create storage base directory at {}", base_dir.display())
+            format!(
+                "failed to create storage base directory at {}",
+                base_dir.display()
+            )
         })?;
         let blob_root = base_dir.join("blobs");
         fs::create_dir_all(&blob_root)
@@ -88,8 +91,12 @@ impl SqliteStorage {
     }
 
     fn connection(&self) -> Result<Connection> {
-        Connection::open(&self.db_path)
-            .with_context(|| format!("failed to open sqlite database at {}", self.db_path.display()))
+        Connection::open(&self.db_path).with_context(|| {
+            format!(
+                "failed to open sqlite database at {}",
+                self.db_path.display()
+            )
+        })
     }
 
     fn migrate(&self) -> Result<()> {
@@ -311,10 +318,8 @@ mod tests {
 
     #[test]
     fn sqlite_storage_round_trips_core_records() {
-        let root = std::env::temp_dir().join(format!(
-            "vaultwares-cli-storage-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("vaultwares-cli-storage-{}", std::process::id()));
         if root.exists() {
             std::fs::remove_dir_all(&root).expect("cleanup old temp dir");
         }

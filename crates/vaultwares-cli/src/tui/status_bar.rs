@@ -337,10 +337,10 @@ pub(crate) fn format_status_report(
             context.git_summary.staged_files,
             context.git_summary.unstaged_files,
             context.git_summary.untracked_files,
-            context
-                .session_path
-                .as_ref()
-                .map_or_else(|| "live-repl".to_string(), |path| path.display().to_string()),
+            context.session_path.as_ref().map_or_else(
+                || "live-repl".to_string(),
+                |path| path.display().to_string()
+            ),
             context.loaded_config_files,
             context.discovered_config_files,
             context.memory_file_count,

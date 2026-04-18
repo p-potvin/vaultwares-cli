@@ -419,9 +419,11 @@ pub(crate) fn run_resume_command(
             ..
         } if act == "list" => {
             let sessions = list_managed_sessions().unwrap_or_default();
-            let session_ids: Vec<String> = sessions.iter().map(|summary| summary.id.clone()).collect();
+            let session_ids: Vec<String> =
+                sessions.iter().map(|summary| summary.id.clone()).collect();
             let active_id = session.session_id.clone();
-            let text = render_session_list(&active_id).unwrap_or_else(|error| format!("error: {error}"));
+            let text =
+                render_session_list(&active_id).unwrap_or_else(|error| format!("error: {error}"));
             Ok(ResumeCommandOutcome {
                 session: session.clone(),
                 message: Some(text),
@@ -491,7 +493,8 @@ pub(crate) fn sessions_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
 
 pub(crate) fn current_session_store() -> Result<runtime::SessionStore, Box<dyn std::error::Error>> {
     let cwd = env::current_dir()?;
-    runtime::SessionStore::from_cwd(&cwd).map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
+    runtime::SessionStore::from_cwd(&cwd)
+        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
 }
 
 pub(crate) fn new_cli_session() -> Result<Session, Box<dyn std::error::Error>> {
@@ -545,8 +548,8 @@ pub(crate) fn list_managed_sessions(
         .collect())
 }
 
-pub(crate) fn latest_managed_session(
-) -> Result<ManagedSessionSummary, Box<dyn std::error::Error>> {
+pub(crate) fn latest_managed_session() -> Result<ManagedSessionSummary, Box<dyn std::error::Error>>
+{
     let session = current_session_store()?
         .latest_session()
         .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)?;
