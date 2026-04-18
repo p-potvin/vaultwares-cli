@@ -633,7 +633,11 @@ fn parse_hex_color(value: &str) -> Option<Color> {
     let red = u8::from_str_radix(&cleaned[0..2], 16).ok()?;
     let green = u8::from_str_radix(&cleaned[2..4], 16).ok()?;
     let blue = u8::from_str_radix(&cleaned[4..6], 16).ok()?;
-    Some(Color::Rgb { r: red, g: green, b: blue })
+    Some(Color::Rgb {
+        r: red,
+        g: green,
+        b: blue,
+    })
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

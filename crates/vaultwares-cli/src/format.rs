@@ -1,7 +1,7 @@
 use crate::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LocalHelpTopic {
+pub enum LocalHelpTopic {
     Status,
     Sandbox,
     Doctor,
@@ -117,11 +117,7 @@ pub(crate) fn format_cost_report(usage: TokenUsage) -> String {
     )
 }
 
-pub(crate) fn format_resume_report(
-    session_path: &str,
-    message_count: usize,
-    turns: u32,
-) -> String {
+pub(crate) fn format_resume_report(session_path: &str, message_count: usize, turns: u32) -> String {
     format!(
         "Session resumed
   Session file     {session_path}

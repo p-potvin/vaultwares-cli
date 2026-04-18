@@ -6,16 +6,20 @@
     clippy::unnecessary_wraps,
     clippy::unused_self
 )]
-mod app;
-mod format;
+pub mod app;
+pub mod args;
+pub mod format;
 mod init;
 mod input;
 mod render;
-mod session_mgr;
+pub mod session_mgr;
 mod tui;
 
-pub(crate) use app::*;
+pub use app::*;
+pub use args::*;
+pub use format::*;
 pub(crate) use format::*;
+pub use session_mgr::*;
 pub(crate) use session_mgr::*;
 pub(crate) use tui::diff_view::*;
 pub(crate) use tui::status_bar::*;
@@ -303,116 +307,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         CliAction::Help { output_format } => print_help(output_format)?,
     }
     Ok(())
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum CliAction {
-    DumpManifests {
-        output_format: CliOutputFormat,
-        manifests_dir: Option<PathBuf>,
-    },
-    BootstrapPlan {
-        output_format: CliOutputFormat,
-    },
-    Agents {
-        args: Option<String>,
-        output_format: CliOutputFormat,
-    },
-    Mcp {
-        args: Option<String>,
-        output_format: CliOutputFormat,
-    },
-    Skills {
-        args: Option<String>,
-        output_format: CliOutputFormat,
-    },
-    Plugins {
-        action: Option<String>,
-        target: Option<String>,
-        output_format: CliOutputFormat,
-    },
-    PrintSystemPrompt {
-        cwd: PathBuf,
-        date: String,
-        output_format: CliOutputFormat,
-    },
-    Version {
-        output_format: CliOutputFormat,
-    },
-    ResumeSession {
-        session_path: PathBuf,
-        commands: Vec<String>,
-        output_format: CliOutputFormat,
-    },
-    Status {
-        model: String,
-        permission_mode: PermissionMode,
-        output_format: CliOutputFormat,
-    },
-    Sandbox {
-        output_format: CliOutputFormat,
-    },
-    SupervisorStatus {
-        redis_url: String,
-        output_format: CliOutputFormat,
-    },
-    SpawnVisibleWorker {
-        redis_url: String,
-        lane_id: String,
-        worker_name: String,
-        cwd: PathBuf,
-        output_format: CliOutputFormat,
-    },
-    Worker {
-        redis_url: String,
-        lane_id: String,
-        worker_name: String,
-        heartbeat_secs: u64,
-    },
-    Prompt {
-        prompt: String,
-        model: String,
-        output_format: CliOutputFormat,
-        allowed_tools: Option<AllowedToolSet>,
-        permission_mode: PermissionMode,
-        compact: bool,
-        base_commit: Option<String>,
-        reasoning_effort: Option<String>,
-        allow_broad_cwd: bool,
-    },
-    Doctor {
-        output_format: CliOutputFormat,
-    },
-    State {
-        output_format: CliOutputFormat,
-    },
-    Init {
-        output_format: CliOutputFormat,
-    },
-    Export {
-        session_reference: String,
-        output_path: Option<PathBuf>,
-        output_format: CliOutputFormat,
-    },
-    Repl {
-        model: String,
-        allowed_tools: Option<AllowedToolSet>,
-        permission_mode: PermissionMode,
-        base_commit: Option<String>,
-        reasoning_effort: Option<String>,
-        allow_broad_cwd: bool,
-    },
-    HelpTopic(LocalHelpTopic),
-    // prompt-mode formatting is only supported for non-interactive runs
-    Help {
-        output_format: CliOutputFormat,
-    },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CliOutputFormat {
-    Text,
-    Json,
 }
 
 impl CliOutputFormat {
@@ -795,9 +689,7 @@ fn parse_supervisor_args(
         return Err("supervisor supports `status` and `spawn-visible`".to_string());
     }
     if args.len() < 3 {
-        return Err(
-            "supervisor spawn-visible requires <lane-id> <worker-name>".to_string(),
-        );
+        return Err("supervisor spawn-visible requires <lane-id> <worker-name>".to_string());
     }
     let lane_id = args[1].clone();
     let worker_name = args[2].clone();
@@ -819,7 +711,9 @@ fn parse_supervisor_args(
                 cwd = PathBuf::from(value);
             }
             other => {
-                return Err(format!("unsupported supervisor spawn-visible argument `{other}`"));
+                return Err(format!(
+                    "unsupported supervisor spawn-visible argument `{other}`"
+                ));
             }
         }
         index += 1;
@@ -968,7 +862,11 @@ fn run_supervisor_status(
             println!("  Redis URL         {redis_url}");
             println!(
                 "  Windows Terminal  {}",
-                if windows_terminal_available { "available" } else { "missing" }
+                if windows_terminal_available {
+                    "available"
+                } else {
+                    "missing"
+                }
             );
             println!("  Status channel    vaultwares:status");
             println!("  Events stream     vw:coord:v1:events");
@@ -2536,7 +2434,6 @@ fn resume_session(session_path: &Path, commands: &[String], output_format: CliOu
         }
     }
 }
-
 
 #[allow(clippy::too_many_lines)]
 fn run_resume_command(
@@ -8210,14 +8107,13 @@ mod tests {
     use super::{
         build_runtime_plugin_state_with_loader, build_runtime_with_plugin_state,
         collect_session_prompt_history, colorize_unified_diff, create_managed_session_handle,
-        describe_tool_progress,
-        filter_tool_specs, format_bughunter_report, format_commit_preflight_report,
-        format_commit_skipped_report, format_compact_report, format_connected_line,
-        format_cost_report, format_history_timestamp, format_internal_prompt_progress_line,
-        format_issue_report, format_model_report, format_model_switch_report,
-        format_permissions_report, format_permissions_switch_report, format_pr_report,
-        format_resume_report, format_status_report, format_tool_call_start, format_tool_result,
-        format_ultraplan_report, format_unknown_slash_command,
+        describe_tool_progress, filter_tool_specs, format_bughunter_report,
+        format_commit_preflight_report, format_commit_skipped_report, format_compact_report,
+        format_connected_line, format_cost_report, format_history_timestamp,
+        format_internal_prompt_progress_line, format_issue_report, format_model_report,
+        format_model_switch_report, format_permissions_report, format_permissions_switch_report,
+        format_pr_report, format_resume_report, format_status_report, format_tool_call_start,
+        format_tool_result, format_ultraplan_report, format_unknown_slash_command,
         format_unknown_slash_command_message, format_user_visible_api_error,
         merge_prompt_with_stdin, normalize_permission_mode, parse_args, parse_export_args,
         parse_git_status_branch, parse_git_status_metadata_for, parse_git_workspace_summary,
