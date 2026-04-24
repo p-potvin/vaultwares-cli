@@ -30,6 +30,6 @@ This agent specializes in converting Python-based workflows into ComfyUI or othe
 - Python: via `agents.WorkflowAgent`
 - Dispatch: `manager.assign_task("workflow-agent", "export_comfyui", workflow_name="my_flow", steps=["load", "process", "save"])`
 
-## Security & Style
-- Follows VaultWares guidelines for privacy, security, and style
+## Privacy, Security & Style
+- Follows VaultWares guidelines for privacy first, security second, and functionality third
 - No data is stored or shared externally

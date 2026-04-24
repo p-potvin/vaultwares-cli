@@ -84,5 +84,5 @@ python run_worker_agent.py --type image --id image-agent-1 &
 
 ## Rules & Compliance
 
-All agents follow VaultWares security, privacy, and style guidelines.
+All agents follow VaultWares privacy-first, security-second, and functionality-third guidelines.
 See `vaultwares-agentciation/skills.md` for the full rigid rules for Extrovert agents.

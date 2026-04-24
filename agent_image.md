@@ -33,6 +33,6 @@ This agent is specialized in image generation, editing, and manipulation. It can
 - Python: via `agents.ImageAgent`
 - Dispatch: `manager.assign_task("image-agent", "generate_image", description="...", prompt="a sunset", model="sdxl")`
 
-## Security & Style
-- Follows VaultWares guidelines for privacy, security, and style
+## Privacy, Security & Style
+- Follows VaultWares guidelines for privacy first, security second, and functionality third
 - No data is stored or shared externally

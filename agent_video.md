@@ -34,6 +34,6 @@ This agent is specialized in video generation, editing, and manipulation. It can
 - Python: via `agents.VideoAgent`
 - Dispatch: `manager.assign_task("video-agent", "trim_video", description="...", source="clip.mp4", start_time=10, end_time=30)`
 
-## Security & Style
-- Follows VaultWares guidelines for privacy, security, and style
+## Privacy, Security & Style
+- Follows VaultWares guidelines for privacy first, security second, and functionality third
 - No data is stored or shared externally

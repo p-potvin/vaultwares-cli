@@ -33,6 +33,6 @@ This agent specializes in text generation, editing, and manipulation. It can:
 - Python: via `agents.TextAgent`
 - Dispatch: `manager.assign_task("text-agent", "generate_caption", description="...", source="image.png")`
 
-## Security & Style
-- Follows VaultWares guidelines for privacy, security, and style
+## Privacy, Security & Style
+- Follows VaultWares guidelines for privacy first, security second, and functionality third
 - No data is stored or shared externally
