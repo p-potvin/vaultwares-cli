@@ -132,14 +132,8 @@ fn run_claw(
     base_url: &str,
     args: &[&str],
 ) -> Output {
-    let mut command = Command::new(claw_bin());
+    let mut command = Command::new(env!("CARGO_BIN_EXE_vaultwares-cli"));
     command.current_dir(cwd);
-
-    #[cfg(not(windows))]
-    {
-        command.env_clear().env("PATH", "/usr/bin:/bin");
-    }
-
     command
         .env("ANTHROPIC_API_KEY", "test-compact-key")
         .env("ANTHROPIC_BASE_URL", base_url)
@@ -156,12 +150,7 @@ fn run_claw(
     command.output().expect("claw should launch")
 }
 
-fn claw_bin() -> String {
-    std::env::var("CARGO_BIN_EXE_vaultwares-cli")
-        .or_else(|_| std::env::var("CARGO_BIN_EXE_vaultwares_cli"))
-        .or_else(|_| std::env::var("CARGO_BIN_EXE_claw"))
-        .expect("cargo should expose test binary path for vaultwares-cli/claw")
-}
+
 
 fn unique_temp_dir(label: &str) -> PathBuf {
     let millis = SystemTime::now()

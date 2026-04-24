@@ -380,7 +380,7 @@ fn assert_json_command_with_env(current_dir: &Path, args: &[&str], envs: &[(&str
 }
 
 fn run_claw(current_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut command = Command::new(claw_bin());
+    let mut command = Command::new(env!("CARGO_BIN_EXE_vaultwares-cli"));
     command.current_dir(current_dir).env_clear().args(args);
 
     if let Some(path) = std::env::var_os("PATH") {
@@ -409,14 +409,7 @@ fn run_claw(current_dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output 
         command.env(key, value);
     }
     command.output().expect("claw should launch")
-}
-
-fn claw_bin() -> String {
-    std::env::var("CARGO_BIN_EXE_vaultwares-cli")
-        .or_else(|_| std::env::var("CARGO_BIN_EXE_vaultwares_cli"))
-        .or_else(|_| std::env::var("CARGO_BIN_EXE_claw"))
-        .expect("cargo should expose test binary path for vaultwares-cli/claw")
-}
+}   
 
 fn write_upstream_fixture(root: &Path) -> PathBuf {
     let upstream = root.join("claw-code");
