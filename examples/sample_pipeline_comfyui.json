@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "name": "sample_pipeline",
+  "nodes": [
+    {
+      "id": 0,
+      "type": "NODE_LOAD_IMAGE",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "id": 1,
+      "type": "NODE_ENHANCE",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "id": 2,
+      "type": "NODE_CAPTION",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "id": 3,
+      "type": "NODE_EXPORT",
+      "inputs": {},
+      "outputs": {}
+    }
+  ],
+  "links": []
+}
