@@ -22,6 +22,7 @@ pub(crate) use format::*;
 pub use session_mgr::*;
 pub(crate) use session_mgr::*;
 pub(crate) use tui::diff_view::*;
+pub(crate) use tui::pager::*;
 pub(crate) use tui::status_bar::*;
 pub(crate) use tui::tool_panel::*;
 
@@ -2768,7 +2769,9 @@ fn run_resume_command(
         | SlashCommand::Ide { .. }
         | SlashCommand::Tag { .. }
         | SlashCommand::OutputStyle { .. }
-        | SlashCommand::AddDir { .. } => Err("unsupported resumed slash command".into()),
+        | SlashCommand::AddDir { .. }
+        | SlashCommand::Search { .. }
+        | SlashCommand::Undo => Err("unsupported resumed slash command".into()),
     }
 }
 
@@ -3561,6 +3564,7 @@ impl LiveCli {
         let (mut runtime, hook_abort_monitor) = self.prepare_turn_runtime(true)?;
         let mut spinner = Spinner::new();
         let mut stdout = io::stdout();
+        let started = Instant::now();
         spinner.tick(
             "🦀 Thinking...",
             TerminalRenderer::new().color_theme(),
@@ -3577,6 +3581,19 @@ impl LiveCli {
                     TerminalRenderer::new().color_theme(),
                     &mut stdout,
                 )?;
+                println!(
+                    "{}",
+                    format_turn_footer(
+                        &self.model,
+                        self.permission_mode.as_str(),
+                        &self.session.id,
+                        summary.usage,
+                        started.elapsed(),
+                    )
+                );
+                if let Some(timeline) = format_tool_timeline(&summary, started.elapsed()) {
+                    println!("{timeline}");
+                }
                 println!();
                 if let Some(event) = summary.auto_compaction {
                     println!(
@@ -3589,8 +3606,12 @@ impl LiveCli {
             }
             Err(error) => {
                 runtime.shutdown_plugins()?;
+                let failure_label = format!(
+                    "Request failed after {}",
+                    format_duration_compact(started.elapsed())
+                );
                 spinner.fail(
-                    "❌ Request failed",
+                    &failure_label,
                     TerminalRenderer::new().color_theme(),
                     &mut stdout,
                 )?;
@@ -3782,6 +3803,14 @@ impl LiveCli {
                 self.print_prompt_history(count.as_deref());
                 false
             }
+            SlashCommand::Search { query } => {
+                self.print_conversation_search(&query)?;
+                false
+            }
+            SlashCommand::Undo => {
+                self.undo_last_file_change()?;
+                false
+            }
             SlashCommand::Stats => {
                 let usage = UsageTracker::from_session(self.runtime.session()).cumulative_usage();
                 println!("{}", format_cost_report(usage));
@@ -3844,21 +3873,21 @@ impl LiveCli {
     fn print_status(&self) {
         let cumulative = self.runtime.usage().cumulative_usage();
         let latest = self.runtime.usage().current_turn_usage();
-        println!(
-            "{}",
-            format_status_report(
-                &self.model,
-                StatusUsage {
-                    message_count: self.runtime.session().messages.len(),
-                    turns: self.runtime.usage().turns(),
-                    latest,
-                    cumulative,
-                    estimated_tokens: self.runtime.estimated_tokens(),
-                },
-                self.permission_mode.as_str(),
-                &status_context(Some(&self.session.path)).expect("status context should load"),
-            )
+        let report = format_status_report(
+            &self.model,
+            StatusUsage {
+                message_count: self.runtime.session().messages.len(),
+                turns: self.runtime.usage().turns(),
+                latest,
+                cumulative,
+                estimated_tokens: self.runtime.estimated_tokens(),
+            },
+            self.permission_mode.as_str(),
+            &status_context(Some(&self.session.path)).expect("status context should load"),
         );
+        if let Err(error) = print_report_or_page(&report) {
+            eprintln!("warning: failed to render status report: {error}");
+        }
     }
 
     fn record_prompt_history(&mut self, prompt: &str) {
@@ -3908,7 +3937,28 @@ impl LiveCli {
                 })
                 .collect()
         };
-        println!("{}", render_prompt_history_report(&entries, limit));
+        let report = render_prompt_history_report(&entries, limit);
+        if let Err(error) = print_report_or_page(&report) {
+            eprintln!("warning: failed to render prompt history: {error}");
+        }
+    }
+
+    fn print_conversation_search(&self, query: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let report = render_conversation_search_report(self.runtime.session(), query);
+        print_report_or_page(&report)?;
+        Ok(())
+    }
+
+    fn undo_last_file_change(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let report = match find_last_file_undo_action(self.runtime.session()) {
+            Some(action) => apply_file_undo_action(&action, self.runtime.session())?,
+            None => {
+                "Undo\n  Result           no reversible file edits found\n  Detail           /undo supports the latest write_file or edit_file result with originalFile data"
+                    .to_string()
+            }
+        };
+        print_report_or_page(&report)?;
+        Ok(())
     }
 
     fn print_sandbox_status() {
@@ -4098,12 +4148,14 @@ impl LiveCli {
     }
 
     fn print_config(section: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-        println!("{}", render_config_report(section)?);
+        let report = render_config_report(section)?;
+        print_report_or_page(&report)?;
         Ok(())
     }
 
     fn print_memory() -> Result<(), Box<dyn std::error::Error>> {
-        println!("{}", render_memory_report()?);
+        let report = render_memory_report()?;
+        print_report_or_page(&report)?;
         Ok(())
     }
 
@@ -4185,7 +4237,8 @@ impl LiveCli {
     }
 
     fn print_diff() -> Result<(), Box<dyn std::error::Error>> {
-        println!("{}", render_diff_report()?);
+        let report = render_diff_report()?;
+        print_report_or_page(&report)?;
         Ok(())
     }
 
@@ -5638,6 +5691,269 @@ fn collect_session_prompt_history(session: &Session) -> Vec<PromptHistoryEntry> 
         .collect()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ConversationSearchHit {
+    message_index: usize,
+    role: &'static str,
+    block_kind: &'static str,
+    snippet: String,
+}
+
+fn render_conversation_search_report(session: &Session, query: &str) -> String {
+    let query = query.trim();
+    if query.is_empty() {
+        return "Conversation search\n  Usage            /search <keyword>\n  Scope            current conversation history"
+            .to_string();
+    }
+
+    let limit = 20;
+    let hits = collect_conversation_search_hits(session, query, limit);
+    if hits.is_empty() {
+        return format!(
+            "Conversation search\n  Query            {query}\n  Result           no matches in current conversation history"
+        );
+    }
+
+    let mut lines = vec![
+        "Conversation search".to_string(),
+        format!("  Query            {query}"),
+        format!("  Matches          {} shown", hits.len()),
+        String::new(),
+    ];
+    for hit in hits {
+        lines.push(format!(
+            "  {:>3}. {} {}",
+            hit.message_index, hit.role, hit.block_kind
+        ));
+        lines.push(format!("       {}", hit.snippet));
+    }
+    lines.join("\n")
+}
+
+fn collect_conversation_search_hits(
+    session: &Session,
+    query: &str,
+    limit: usize,
+) -> Vec<ConversationSearchHit> {
+    let normalized_query = query.to_ascii_lowercase();
+    let mut hits = Vec::new();
+    for (index, message) in session.messages.iter().enumerate() {
+        for block in &message.blocks {
+            let Some((block_kind, text)) = searchable_block_text(block) else {
+                continue;
+            };
+            if !text.to_ascii_lowercase().contains(&normalized_query) {
+                continue;
+            }
+            hits.push(ConversationSearchHit {
+                message_index: index + 1,
+                role: message_role_label(message.role),
+                block_kind,
+                snippet: search_snippet(&text, &normalized_query),
+            });
+            if hits.len() >= limit {
+                return hits;
+            }
+        }
+    }
+    hits
+}
+
+fn searchable_block_text(block: &ContentBlock) -> Option<(&'static str, String)> {
+    match block {
+        ContentBlock::Text { text } => Some(("text", text.clone())),
+        ContentBlock::ToolUse { name, input, .. } => Some(("tool-call", format!("{name} {input}"))),
+        ContentBlock::ToolResult {
+            tool_name, output, ..
+        } => Some(("tool-result", format!("{tool_name} {output}"))),
+    }
+}
+
+fn message_role_label(role: MessageRole) -> &'static str {
+    match role {
+        MessageRole::System => "system",
+        MessageRole::User => "user",
+        MessageRole::Assistant => "assistant",
+        MessageRole::Tool => "tool",
+    }
+}
+
+fn search_snippet(text: &str, normalized_query: &str) -> String {
+    let line = text
+        .lines()
+        .find(|line| line.to_ascii_lowercase().contains(normalized_query))
+        .unwrap_or(text)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    truncate_for_summary(&line, 140)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum FileUndoKind {
+    RestoreOriginal,
+    DeleteCreatedFile,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FileUndoAction {
+    tool_name: String,
+    file_path: String,
+    original_file: Option<String>,
+    expected_current: Option<String>,
+    kind: FileUndoKind,
+}
+
+fn find_last_file_undo_action(session: &Session) -> Option<FileUndoAction> {
+    session
+        .messages
+        .iter()
+        .rev()
+        .flat_map(|message| message.blocks.iter().rev())
+        .find_map(|block| match block {
+            ContentBlock::ToolResult {
+                tool_name,
+                output,
+                is_error,
+                ..
+            } if !is_error => parse_file_undo_action(tool_name, output),
+            _ => None,
+        })
+}
+
+fn parse_file_undo_action(tool_name: &str, output: &str) -> Option<FileUndoAction> {
+    let parsed = serde_json::from_str::<serde_json::Value>(output).ok()?;
+    let normalized_tool = match tool_name {
+        "write_file" | "Write" => "write_file",
+        "edit_file" | "Edit" => "edit_file",
+        _ => return None,
+    };
+    let file_path = json_string_field(&parsed, &["filePath", "file_path", "path"])?;
+    match normalized_tool {
+        "write_file" => {
+            let original_file = json_string_field(&parsed, &["originalFile", "original_file"]);
+            let expected_current = json_string_field(&parsed, &["content"]);
+            let kind = if original_file.is_some() {
+                FileUndoKind::RestoreOriginal
+            } else if parsed
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|value| value == "create")
+            {
+                FileUndoKind::DeleteCreatedFile
+            } else {
+                return None;
+            };
+            Some(FileUndoAction {
+                tool_name: tool_name.to_string(),
+                file_path,
+                original_file,
+                expected_current,
+                kind,
+            })
+        }
+        "edit_file" => {
+            let original_file = json_string_field(&parsed, &["originalFile", "original_file"])?;
+            let old_string = json_string_field(&parsed, &["oldString", "old_string"])?;
+            let new_string = json_string_field(&parsed, &["newString", "new_string"])?;
+            let replace_all = parsed
+                .get("replaceAll")
+                .or_else(|| parsed.get("replace_all"))
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+            let expected_current = if replace_all {
+                original_file.replace(&old_string, &new_string)
+            } else {
+                original_file.replacen(&old_string, &new_string, 1)
+            };
+            Some(FileUndoAction {
+                tool_name: tool_name.to_string(),
+                file_path,
+                original_file: Some(original_file),
+                expected_current: Some(expected_current),
+                kind: FileUndoKind::RestoreOriginal,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn json_string_field(value: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    keys.iter()
+        .find_map(|key| value.get(*key).and_then(serde_json::Value::as_str))
+        .map(ToOwned::to_owned)
+}
+
+fn apply_file_undo_action(
+    action: &FileUndoAction,
+    session: &Session,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let path = resolve_undo_path(&action.file_path, session)?;
+    let Some(expected_current) = action.expected_current.as_deref() else {
+        return Ok(format!(
+            "Undo\n  Result           refused\n  Reason           recorded {} result does not include the expected current file content\n  File             {}",
+            action.tool_name,
+            path.display()
+        ));
+    };
+    let current = match fs::read_to_string(&path) {
+        Ok(value) => value,
+        Err(error) => {
+            return Ok(format!(
+                "Undo\n  Result           refused\n  Reason           could not read target file: {error}\n  File             {}",
+                path.display()
+            ));
+        }
+    };
+    if current != expected_current {
+        return Ok(format!(
+            "Undo\n  Result           refused\n  Reason           target file changed after the recorded {} result\n  File             {}",
+            action.tool_name,
+            path.display()
+        ));
+    }
+
+    match action.kind {
+        FileUndoKind::RestoreOriginal => {
+            let original = action.original_file.as_deref().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "restore undo action is missing originalFile",
+                )
+            })?;
+            fs::write(&path, original)?;
+            Ok(format!(
+                "Undo\n  Result           restored original file\n  Tool             {}\n  File             {}\n  Bytes restored   {}",
+                action.tool_name,
+                path.display(),
+                original.len()
+            ))
+        }
+        FileUndoKind::DeleteCreatedFile => {
+            fs::remove_file(&path)?;
+            Ok(format!(
+                "Undo\n  Result           removed created file\n  Tool             {}\n  File             {}",
+                action.tool_name,
+                path.display()
+            ))
+        }
+    }
+}
+
+fn resolve_undo_path(
+    raw_path: &str,
+    session: &Session,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let path = PathBuf::from(raw_path);
+    if path.is_absolute() {
+        return Ok(path);
+    }
+    if let Some(root) = session.workspace_root() {
+        return Ok(root.join(path));
+    }
+    Ok(env::current_dir()?.join(path))
+}
+
 fn recent_user_context(session: &Session, limit: usize) -> String {
     let requests = session
         .messages
@@ -6492,14 +6808,7 @@ impl runtime::PermissionPrompter for CliPermissionPrompter {
         request: &runtime::PermissionRequest,
     ) -> runtime::PermissionPromptDecision {
         println!();
-        println!("Permission approval required");
-        println!("  Tool             {}", request.tool_name);
-        println!("  Current mode     {}", self.current_mode.as_str());
-        println!("  Required mode    {}", request.required_mode.as_str());
-        if let Some(reason) = &request.reason {
-            println!("  Reason           {reason}");
-        }
-        println!("  Input            {}", request.input);
+        println!("{}", format_permission_prompt(request, self.current_mode));
         print!("Approve this tool call? [y/N]: ");
         let _ = io::stdout().flush();
 
@@ -6523,6 +6832,31 @@ impl runtime::PermissionPrompter for CliPermissionPrompter {
             },
         }
     }
+}
+
+fn format_permission_prompt(
+    request: &runtime::PermissionRequest,
+    current_mode: PermissionMode,
+) -> String {
+    let reason = request
+        .reason
+        .as_deref()
+        .unwrap_or("tool requires approval");
+    let input = truncate_for_summary(&request.input.replace('\n', " "), 220);
+    format!(
+        "\x1b[38;5;245m╭─ \x1b[1;33mPermission approval required\x1b[0;38;5;245m ─╮\x1b[0m\n\
+         \x1b[38;5;245m│\x1b[0m Tool             \x1b[1;36m{}\x1b[0m\n\
+         \x1b[38;5;245m│\x1b[0m Current mode     {}\n\
+         \x1b[38;5;245m│\x1b[0m Required mode    \x1b[1;33m{}\x1b[0m\n\
+         \x1b[38;5;245m│\x1b[0m Reason           {}\n\
+         \x1b[38;5;245m│\x1b[0m Input            {}\n\
+         \x1b[38;5;245m╰────────────────────────────────────╯\x1b[0m",
+        request.tool_name,
+        current_mode.as_str(),
+        request.required_mode.as_str(),
+        reason,
+        input,
+    )
 }
 
 // NOTE: Despite the historical name `AnthropicRuntimeClient`, this struct
@@ -7000,6 +7334,54 @@ fn collect_tool_results(summary: &runtime::TurnSummary) -> Vec<serde_json::Value
         .collect()
 }
 
+fn format_tool_timeline(summary: &runtime::TurnSummary, elapsed: Duration) -> Option<String> {
+    let tool_uses = collect_tool_uses(summary);
+    if tool_uses.is_empty() {
+        return None;
+    }
+    let tool_results = collect_tool_results(summary);
+    let segments = tool_uses
+        .iter()
+        .map(|tool_use| {
+            let id = tool_use
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let name = tool_use
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("tool");
+            let status = tool_results
+                .iter()
+                .find(|result| {
+                    result
+                        .get("tool_use_id")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|tool_use_id| tool_use_id == id)
+                })
+                .map(|result| {
+                    if result
+                        .get("is_error")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false)
+                    {
+                        "error"
+                    } else {
+                        "ok"
+                    }
+                })
+                .unwrap_or("pending");
+            format!("{name} -> {status}")
+        })
+        .collect::<Vec<_>>();
+    Some(format!(
+        "\x1b[2mTool timeline  {} ({} tools, {})\x1b[0m",
+        segments.join(" | "),
+        segments.len(),
+        format_duration_compact(elapsed)
+    ))
+}
+
 fn collect_prompt_cache_events(summary: &runtime::TurnSummary) -> Vec<serde_json::Value> {
     summary
         .prompt_cache_events
@@ -7088,13 +7470,11 @@ const STUB_COMMANDS: &[&str] = &[
     "terminal-setup",
     "api-key",
     "reset",
-    "undo",
     "stop",
     "retry",
     "paste",
     "screenshot",
     "image",
-    "search",
     "listen",
     "speak",
     "format",
@@ -8105,20 +8485,23 @@ fn print_help(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::
 #[cfg(test)]
 mod tests {
     use super::{
-        build_runtime_plugin_state_with_loader, build_runtime_with_plugin_state,
+        apply_file_undo_action, build_runtime_plugin_state_with_loader,
+        build_runtime_with_plugin_state, collect_conversation_search_hits,
         collect_session_prompt_history, colorize_unified_diff, create_managed_session_handle,
-        describe_tool_progress, filter_tool_specs, format_bughunter_report,
-        format_commit_preflight_report, format_commit_skipped_report, format_compact_report,
-        format_connected_line, format_cost_report, format_history_timestamp,
-        format_internal_prompt_progress_line, format_issue_report, format_model_report,
-        format_model_switch_report, format_permissions_report, format_permissions_switch_report,
-        format_pr_report, format_resume_report, format_status_report, format_tool_call_start,
-        format_tool_result, format_ultraplan_report, format_unknown_slash_command,
-        format_unknown_slash_command_message, format_user_visible_api_error,
-        merge_prompt_with_stdin, normalize_permission_mode, parse_args, parse_export_args,
-        parse_git_status_branch, parse_git_status_metadata_for, parse_git_workspace_summary,
-        parse_history_count, permission_policy, print_help_to, push_output_block,
-        render_config_report, render_diff_report, render_diff_report_for, render_memory_report,
+        describe_tool_progress, filter_tool_specs, find_last_file_undo_action,
+        format_bughunter_report, format_commit_preflight_report, format_commit_skipped_report,
+        format_compact_report, format_connected_line, format_cost_report, format_duration_compact,
+        format_history_timestamp, format_internal_prompt_progress_line, format_issue_report,
+        format_model_report, format_model_switch_report, format_permission_prompt,
+        format_permissions_report, format_permissions_switch_report, format_pr_report,
+        format_resume_report, format_status_report, format_tool_call_start, format_tool_result,
+        format_tool_timeline, format_turn_footer, format_ultraplan_report,
+        format_unknown_slash_command, format_unknown_slash_command_message,
+        format_user_visible_api_error, merge_prompt_with_stdin, normalize_permission_mode,
+        parse_args, parse_export_args, parse_git_status_branch, parse_git_status_metadata_for,
+        parse_git_workspace_summary, parse_history_count, permission_policy, print_help_to,
+        push_output_block, render_config_report, render_conversation_search_report,
+        render_diff_report, render_diff_report_for, render_memory_report,
         render_prompt_history_report, render_repl_help, render_resume_usage,
         render_session_markdown, resolve_model_alias, resolve_model_alias_with_config,
         resolve_repl_model, resolve_session_reference, response_to_events,
@@ -8136,7 +8519,8 @@ mod tests {
     };
     use runtime::{
         load_oauth_credentials, save_oauth_credentials, AssistantEvent, ConfigLoader, ContentBlock,
-        ConversationMessage, MessageRole, OAuthConfig, PermissionMode, Session, ToolExecutor,
+        ConversationMessage, MessageRole, OAuthConfig, PermissionMode, PermissionRequest, Session,
+        TokenUsage, ToolExecutor, TurnSummary,
     };
     use serde_json::json;
     use std::fs;
@@ -9783,6 +10167,8 @@ mod tests {
         assert!(completions.contains(&"/resume session-old".to_string()));
         assert!(completions.contains(&"/mcp list".to_string()));
         assert!(completions.contains(&"/ultraplan ".to_string()));
+        assert!(completions.contains(&"/search".to_string()));
+        assert!(completions.contains(&"/undo".to_string()));
     }
 
     #[test]
@@ -10046,6 +10432,37 @@ mod tests {
         assert!(status.contains("Config files     loaded 2/3"));
         assert!(status.contains("Memory files     4"));
         assert!(status.contains("Suggested flow   /status → /diff → /commit"));
+    }
+
+    #[test]
+    fn turn_footer_reports_elapsed_usage_and_session_context() {
+        let footer = format_turn_footer(
+            "claude-sonnet",
+            "workspace-write",
+            "session-123",
+            runtime::TokenUsage {
+                input_tokens: 10,
+                output_tokens: 5,
+                cache_creation_input_tokens: 2,
+                cache_read_input_tokens: 1,
+            },
+            Duration::from_millis(1250),
+        );
+
+        assert!(footer.contains("Turn summary"));
+        assert!(footer.contains("model claude-sonnet"));
+        assert!(footer.contains("permissions workspace-write"));
+        assert!(footer.contains("session session-123"));
+        assert!(footer.contains("elapsed 1.2s"));
+        assert!(footer.contains("tokens 18 total"));
+        assert!(footer.contains("in 10, out 5, cache 3"));
+        assert!(footer.contains("cost $"));
+    }
+
+    #[test]
+    fn compact_duration_formats_minutes_after_sixty_seconds() {
+        assert_eq!(format_duration_compact(Duration::from_millis(900)), "0.9s");
+        assert_eq!(format_duration_compact(Duration::from_secs(75)), "1m 15s");
     }
 
     #[test]
@@ -10749,6 +11166,145 @@ UU conflicted.rs",
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].text, "hello");
         assert_eq!(entries[1].text, "world");
+    }
+
+    #[test]
+    fn conversation_search_report_finds_matching_messages() {
+        let mut session = Session::new();
+        session
+            .push_user_text("Please inspect token usage")
+            .unwrap();
+        session
+            .messages
+            .push(ConversationMessage::assistant(vec![ContentBlock::Text {
+                text: "Token totals are available in /status.".to_string(),
+            }]));
+
+        let report = render_conversation_search_report(&session, "token");
+        let hits = collect_conversation_search_hits(&session, "token", 10);
+
+        assert!(report.contains("Conversation search"));
+        assert!(report.contains("Query            token"));
+        assert!(report.contains("user text"));
+        assert!(report.contains("assistant text"));
+        assert_eq!(hits.len(), 2);
+    }
+
+    #[test]
+    fn undo_reverts_last_write_file_tool_result_when_unchanged() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("root");
+        let target = root.join("demo.txt");
+        fs::write(&target, "updated\n").expect("write updated");
+        let output = json!({
+            "type": "update",
+            "filePath": target.display().to_string(),
+            "content": "updated\n",
+            "originalFile": "original\n"
+        })
+        .to_string();
+        let mut session = Session::new();
+        session.messages.push(ConversationMessage::tool_result(
+            "tool-1",
+            "write_file",
+            output,
+            false,
+        ));
+
+        let action = find_last_file_undo_action(&session).expect("undo action");
+        let report = apply_file_undo_action(&action, &session).expect("undo applies");
+
+        assert!(report.contains("restored original file"));
+        assert_eq!(
+            fs::read_to_string(&target).expect("read restored"),
+            "original\n"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn undo_refuses_when_target_file_drifted() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("root");
+        let target = root.join("demo.txt");
+        fs::write(&target, "user changed\n").expect("write drift");
+        let output = json!({
+            "type": "update",
+            "filePath": target.display().to_string(),
+            "content": "updated\n",
+            "originalFile": "original\n"
+        })
+        .to_string();
+        let mut session = Session::new();
+        session.messages.push(ConversationMessage::tool_result(
+            "tool-1",
+            "write_file",
+            output,
+            false,
+        ));
+
+        let action = find_last_file_undo_action(&session).expect("undo action");
+        let report = apply_file_undo_action(&action, &session).expect("undo refuses cleanly");
+
+        assert!(report.contains("refused"));
+        assert!(report.contains("target file changed"));
+        assert_eq!(
+            fs::read_to_string(&target).expect("read drifted"),
+            "user changed\n"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn tool_timeline_summary_orders_calls_and_marks_errors() {
+        let summary = TurnSummary {
+            assistant_messages: vec![ConversationMessage::assistant(vec![
+                ContentBlock::ToolUse {
+                    id: "a".to_string(),
+                    name: "bash".to_string(),
+                    input: "{}".to_string(),
+                },
+                ContentBlock::ToolUse {
+                    id: "b".to_string(),
+                    name: "read_file".to_string(),
+                    input: "{}".to_string(),
+                },
+            ])],
+            tool_results: vec![
+                ConversationMessage::tool_result("a", "bash", "ok", false),
+                ConversationMessage::tool_result("b", "read_file", "nope", true),
+            ],
+            prompt_cache_events: Vec::new(),
+            iterations: 1,
+            usage: TokenUsage::default(),
+            auto_compaction: None,
+        };
+
+        let rendered = format_tool_timeline(&summary, Duration::from_secs(65))
+            .expect("timeline should render");
+
+        assert!(rendered.contains("bash -> ok | read_file -> error"));
+        assert!(rendered.contains("2 tools"));
+        assert!(rendered.contains("1m 05s"));
+    }
+
+    #[test]
+    fn permission_prompt_renders_required_mode_and_truncated_input() {
+        let request = PermissionRequest {
+            tool_name: "write_file".to_string(),
+            input: "x".repeat(400),
+            current_mode: PermissionMode::ReadOnly,
+            required_mode: PermissionMode::WorkspaceWrite,
+            reason: Some("writes to workspace".to_string()),
+        };
+
+        let rendered = format_permission_prompt(&request, PermissionMode::ReadOnly);
+
+        assert!(rendered.contains("Permission approval required"));
+        assert!(rendered.contains("write_file"));
+        assert!(rendered.contains("workspace-write"));
+        assert!(rendered.contains("writes to workspace"));
+        assert!(rendered.contains("…"));
     }
 
     #[test]
@@ -11573,7 +12129,10 @@ mod dump_manifests_tests {
             "error message should mention missing manifest sources: {error_msg}"
         );
         assert!(
-            error_msg.contains(&format!("claw_test_missing_manifests_{}", std::process::id())),
+            error_msg.contains(&format!(
+                "claw_test_missing_manifests_{}",
+                std::process::id()
+            )),
             "error message should contain the resolved repo root path: {error_msg}"
         );
         assert!(

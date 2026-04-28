@@ -596,7 +596,7 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
     SlashCommandSpec {
         name: "search",
         aliases: &[],
-        summary: "Search files in the workspace",
+        summary: "Search conversation history by keyword",
         argument_hint: Some("<query>"),
         resume_supported: false,
     },
@@ -1179,6 +1179,10 @@ pub enum SlashCommand {
     History {
         count: Option<String>,
     },
+    Search {
+        query: String,
+    },
+    Undo,
     Unknown(String),
 }
 
@@ -1277,6 +1281,8 @@ impl SlashCommand {
             Self::Tag { .. } => "/tag",
             Self::OutputStyle { .. } => "/output-style",
             Self::AddDir { .. } => "/add-dir",
+            Self::Search { .. } => "/search",
+            Self::Undo => "/undo",
             Self::Sandbox => "/sandbox",
             Self::Mcp { .. } => "/mcp",
             Self::Export { .. } => "/export",
@@ -1491,6 +1497,13 @@ pub fn validate_slash_command_input(
         "history" => SlashCommand::History {
             count: optional_single_arg(command, &args, "[count]")?,
         },
+        "search" => SlashCommand::Search {
+            query: require_remainder(command, remainder, "<query>")?,
+        },
+        "undo" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Undo
+        }
         other => SlashCommand::Unknown(other.to_string()),
     }))
 }
@@ -4110,6 +4123,8 @@ pub fn handle_slash_command(
         | SlashCommand::OutputStyle { .. }
         | SlashCommand::AddDir { .. }
         | SlashCommand::History { .. }
+        | SlashCommand::Search { .. }
+        | SlashCommand::Undo
         | SlashCommand::Unknown(_) => None,
     }
 }
@@ -4405,6 +4420,13 @@ mod tests {
                 target: Some("demo".to_string())
             }))
         );
+        assert_eq!(SlashCommand::parse("/undo"), Ok(Some(SlashCommand::Undo)));
+        assert_eq!(
+            SlashCommand::parse("/search token usage"),
+            Ok(Some(SlashCommand::Search {
+                query: "token usage".to_string()
+            }))
+        );
         assert_eq!(
             SlashCommand::parse("/skills install ./fixtures/help-skill"),
             Ok(Some(SlashCommand::Skills {
@@ -4466,6 +4488,14 @@ mod tests {
 
         // then
         assert!(error.contains("Usage: /history [count]"));
+    }
+
+    #[test]
+    fn rejects_search_without_query() {
+        let error = parse_error_message("/search");
+
+        assert!(error.contains("Usage: /search <query>"));
+        assert!(error.contains("Search conversation history by keyword"));
     }
 
     #[test]

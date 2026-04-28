@@ -350,6 +350,37 @@ pub(crate) fn format_status_report(
     .join("\n\n")
 }
 
+pub(crate) fn format_turn_footer(
+    model: &str,
+    permission_mode: &str,
+    session_id: &str,
+    usage: TokenUsage,
+    elapsed: Duration,
+) -> String {
+    let pricing = pricing_for_model(model).unwrap_or_else(ModelPricing::default_sonnet_tier);
+    let estimated_cost = usage.estimate_cost_usd_with_pricing(pricing);
+    format!(
+        "\x1b[2mTurn summary  model {model} | permissions {permission_mode} | session {session_id} | elapsed {} | tokens {} total (in {}, out {}, cache {}) | cost {}\x1b[0m",
+        format_duration_compact(elapsed),
+        usage.total_tokens(),
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.cache_creation_input_tokens + usage.cache_read_input_tokens,
+        format_usd(estimated_cost.total_cost_usd()),
+    )
+}
+
+pub(crate) fn format_duration_compact(duration: Duration) -> String {
+    let total_seconds = duration.as_secs();
+    if total_seconds < 60 {
+        return format!("{total_seconds}.{:01}s", duration.subsec_millis() / 100);
+    }
+
+    let minutes = total_seconds / 60;
+    let seconds = total_seconds % 60;
+    format!("{minutes}m {seconds:02}s")
+}
+
 pub(crate) fn format_sandbox_report(status: &runtime::SandboxStatus) -> String {
     format!(
         "Sandbox

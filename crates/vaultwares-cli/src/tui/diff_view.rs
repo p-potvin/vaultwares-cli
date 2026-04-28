@@ -28,13 +28,40 @@ pub(crate) fn render_diff_report_for(cwd: &Path) -> Result<String, Box<dyn std::
 
     let mut sections = Vec::new();
     if !staged.trim().is_empty() {
-        sections.push(format!("Staged changes:\n{}", staged.trim_end()));
+        sections.push(format!(
+            "Staged changes:\n{}",
+            colorize_unified_diff(staged.trim_end())
+        ));
     }
     if !unstaged.trim().is_empty() {
-        sections.push(format!("Unstaged changes:\n{}", unstaged.trim_end()));
+        sections.push(format!(
+            "Unstaged changes:\n{}",
+            colorize_unified_diff(unstaged.trim_end())
+        ));
     }
 
     Ok(format!("Diff\n\n{}", sections.join("\n\n")))
+}
+
+pub(crate) fn colorize_unified_diff(diff: &str) -> String {
+    diff.lines()
+        .map(colorize_unified_diff_line)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn colorize_unified_diff_line(line: &str) -> String {
+    match line {
+        value if value.starts_with('+') && !value.starts_with("+++") => {
+            format!("\x1b[38;5;70m{value}\x1b[0m")
+        }
+        value if value.starts_with('-') && !value.starts_with("---") => {
+            format!("\x1b[38;5;203m{value}\x1b[0m")
+        }
+        value if value.starts_with("@@") => format!("\x1b[38;5;75m{value}\x1b[0m"),
+        value if value.starts_with("diff --git") => format!("\x1b[1m{value}\x1b[0m"),
+        value => value.to_string(),
+    }
 }
 
 pub(crate) fn render_diff_json_for(
