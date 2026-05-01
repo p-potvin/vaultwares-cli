@@ -16,4 +16,3 @@ venv/
 Cargo.lock
 clippy_errors.txt
 errors*.txt
-crates/*

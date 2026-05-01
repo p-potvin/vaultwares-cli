@@ -1,0 +1,12 @@
+[package]
+name = "vaultwares-fhe"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+tfhe = { version = "0.7.2", features = ["integer", "seeder_x86_64_rdseed"] }
+
+[lints]
+workspace = true
