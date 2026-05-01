@@ -349,8 +349,7 @@ fn generate_random_token(bytes: usize) -> io::Result<String> {
             ])
             .output()?;
         if !output.status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 format!(
                     "failed to generate random token with PowerShell (exit status: {})",
                     output.status
@@ -367,7 +366,7 @@ fn generate_random_token(bytes: usize) -> io::Result<String> {
                 "powershell random token output was empty",
             ));
         }
-        return Ok(token);
+        Ok(token)
     }
 
     #[cfg(not(windows))]

@@ -305,6 +305,7 @@ impl BlobStore for SqliteStorage {
     }
 }
 
+#[must_use] 
 pub fn now_timestamp() -> i64 {
     Utc::now().timestamp()
 }

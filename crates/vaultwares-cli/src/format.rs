@@ -8,7 +8,7 @@ pub enum LocalHelpTopic {
 }
 
 #[cfg(test)]
-pub(crate) fn format_unknown_slash_command_message(name: &str) -> String {
+pub fn format_unknown_slash_command_message(name: &str) -> String {
     let suggestions = suggest_slash_commands(name);
     let mut message = format!("unknown slash command: /{name}.");
     if !suggestions.is_empty() {
@@ -24,7 +24,7 @@ pub(crate) fn format_unknown_slash_command_message(name: &str) -> String {
     message
 }
 
-pub(crate) fn format_model_report(model: &str, message_count: usize, turns: u32) -> String {
+pub fn format_model_report(model: &str, message_count: usize, turns: u32) -> String {
     format!(
         "Model
   Current model    {model}
@@ -37,7 +37,7 @@ Usage
     )
 }
 
-pub(crate) fn format_model_switch_report(
+pub fn format_model_switch_report(
     previous: &str,
     next: &str,
     message_count: usize,
@@ -50,7 +50,7 @@ pub(crate) fn format_model_switch_report(
     )
 }
 
-pub(crate) fn format_permissions_report(mode: &str) -> String {
+pub fn format_permissions_report(mode: &str) -> String {
     let modes = [
         ("read-only", "Read/search tools only", mode == "read-only"),
         (
@@ -90,7 +90,7 @@ Usage
     )
 }
 
-pub(crate) fn format_permissions_switch_report(previous: &str, next: &str) -> String {
+pub fn format_permissions_switch_report(previous: &str, next: &str) -> String {
     format!(
         "Permissions updated
   Result           mode switched
@@ -101,7 +101,7 @@ pub(crate) fn format_permissions_switch_report(previous: &str, next: &str) -> St
     )
 }
 
-pub(crate) fn format_cost_report(usage: TokenUsage) -> String {
+pub fn format_cost_report(usage: TokenUsage) -> String {
     format!(
         "Cost
   Input tokens     {}
@@ -117,7 +117,7 @@ pub(crate) fn format_cost_report(usage: TokenUsage) -> String {
     )
 }
 
-pub(crate) fn format_resume_report(session_path: &str, message_count: usize, turns: u32) -> String {
+pub fn format_resume_report(session_path: &str, message_count: usize, turns: u32) -> String {
     format!(
         "Session resumed
   Session file     {session_path}
@@ -126,7 +126,7 @@ pub(crate) fn format_resume_report(session_path: &str, message_count: usize, tur
     )
 }
 
-pub(crate) fn render_resume_usage() -> String {
+pub fn render_resume_usage() -> String {
     format!(
         "Resume
   Usage            /resume <session-path|session-id|{LATEST_SESSION_REFERENCE}>
@@ -135,7 +135,7 @@ pub(crate) fn render_resume_usage() -> String {
     )
 }
 
-pub(crate) fn format_compact_report(
+pub fn format_compact_report(
     removed: usize,
     resulting_messages: usize,
     skipped: bool,
@@ -157,11 +157,11 @@ pub(crate) fn format_compact_report(
     }
 }
 
-pub(crate) fn format_auto_compaction_notice(removed: usize) -> String {
+pub fn format_auto_compaction_notice(removed: usize) -> String {
     format!("[auto-compacted: removed {removed} messages]")
 }
 
-pub(crate) fn render_help_topic(topic: LocalHelpTopic) -> String {
+pub fn render_help_topic(topic: LocalHelpTopic) -> String {
     match topic {
         LocalHelpTopic::Status => "Status
   Usage            claw status
@@ -184,6 +184,6 @@ pub(crate) fn render_help_topic(topic: LocalHelpTopic) -> String {
     }
 }
 
-pub(crate) fn print_help_topic(topic: LocalHelpTopic) {
+pub fn print_help_topic(topic: LocalHelpTopic) {
     println!("{}", render_help_topic(topic));
 }

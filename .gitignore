@@ -1,10 +1,8 @@
-<<<<<<< HEAD
 target/
 .omx/
 .clawd-agents/
 .clawd-todos.json
 .vaultwares-cli/
-=======
 __pycache__/
 *.py[cod]
 *$py.class
@@ -15,4 +13,7 @@ build/
 venv/
 *.egg
 .env
->>>>>>> fd226f6a23accec0bfc576f16da1590d81de562b
+Cargo.lock
+clippy_errors.txt
+errors*.txt
+crates/*

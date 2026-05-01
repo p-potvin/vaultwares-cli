@@ -316,6 +316,7 @@ impl LaneSupervisor {
         Ok((lane.clone(), alert))
     }
 
+    #[must_use] 
     pub fn stale_alerts(&self) -> Vec<SupervisorAlert> {
         let now = now_epoch_secs();
         self.lanes

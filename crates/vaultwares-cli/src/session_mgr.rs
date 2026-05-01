@@ -1,14 +1,32 @@
+use runtime::session_control::SessionControlError;
 use crate::*;
 
 #[derive(Debug, Clone)]
-pub(crate) struct ResumeCommandOutcome {
-    pub(crate) session: Session,
-    pub(crate) message: Option<String>,
-    pub(crate) json: Option<serde_json::Value>,
+pub struct SessionHandle {
+    pub id: String,
+    pub path: PathBuf,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ManagedSessionSummary {
+    pub id: String,
+    pub path: PathBuf,
+    pub modified_epoch_millis: u128,
+    pub message_count: usize,
+    pub parent_session_id: Option<String>,
+    pub branch_name: Option<String>,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct ResumeCommandOutcome {
+    pub session: Session,
+    pub message: Option<String>,
+    pub json: Option<serde_json::Value>,
 }
 
 #[allow(clippy::too_many_lines)]
-pub(crate) fn resume_session(
+pub fn resume_session(
     session_path: &Path,
     commands: &[String],
     output_format: CliOutputFormat,
@@ -61,7 +79,7 @@ pub(crate) fn resume_session(
             .split_whitespace()
             .next()
             .unwrap_or("");
-        if STUB_COMMANDS.contains(&cmd_root) {
+        if crate::STUB_COMMANDS.contains(&cmd_root) {
             if output_format == CliOutputFormat::Json {
                 eprintln!(
                     "{}",
@@ -150,7 +168,7 @@ pub(crate) fn resume_session(
 }
 
 #[allow(clippy::too_many_lines)]
-pub(crate) fn run_resume_command(
+pub fn run_resume_command(
     session_path: &Path,
     session: &Session,
     command: &SlashCommand,
@@ -223,10 +241,10 @@ pub(crate) fn run_resume_command(
         SlashCommand::Status => {
             let tracker = UsageTracker::from_session(session);
             let usage = tracker.cumulative_usage();
-            let context = status_context(Some(session_path))?;
+            let context = tui::status_bar::status_context(Some(session_path))?;
             Ok(ResumeCommandOutcome {
                 session: session.clone(),
-                message: Some(format_status_report(
+                message: Some(tui::status_bar::format_status_report(
                     session.model.as_deref().unwrap_or("restored-session"),
                     StatusUsage {
                         message_count: session.messages.len(),
@@ -238,7 +256,7 @@ pub(crate) fn run_resume_command(
                     default_permission_mode().as_str(),
                     &context,
                 )),
-                json: Some(status_json_value(
+                json: Some(tui::status_bar::status_json_value(
                     session.model.as_deref(),
                     StatusUsage {
                         message_count: session.messages.len(),
@@ -396,7 +414,7 @@ pub(crate) fn run_resume_command(
         }
         SlashCommand::History { count } => {
             let limit = parse_history_count(count.as_deref())
-                .map_err(|error| -> Box<dyn std::error::Error> { error.into() })?;
+                .map_err(|error: String| -> Box<dyn std::error::Error> { error.into() })?;
             let entries = collect_session_prompt_history(session);
             let shown: Vec<_> = entries.iter().rev().take(limit).rev().collect();
             Ok(ResumeCommandOutcome {
@@ -489,21 +507,21 @@ pub(crate) fn run_resume_command(
     }
 }
 
-pub(crate) fn sessions_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub fn sessions_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(current_session_store()?.sessions_dir().to_path_buf())
 }
 
-pub(crate) fn current_session_store() -> Result<runtime::SessionStore, Box<dyn std::error::Error>> {
+pub fn current_session_store() -> Result<runtime::SessionStore, Box<dyn std::error::Error>> {
     let cwd = env::current_dir()?;
     runtime::SessionStore::from_cwd(&cwd)
-        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
+        .map_err(|error: SessionControlError| Box::new(error) as Box<dyn std::error::Error>)
 }
 
-pub(crate) fn new_cli_session() -> Result<Session, Box<dyn std::error::Error>> {
+pub fn new_cli_session() -> Result<Session, Box<dyn std::error::Error>> {
     Ok(Session::new().with_workspace_root(env::current_dir()?))
 }
 
-pub(crate) fn create_managed_session_handle(
+pub fn create_managed_session_handle(
     session_id: &str,
 ) -> Result<SessionHandle, Box<dyn std::error::Error>> {
     let handle = current_session_store()?.create_handle(session_id);
@@ -513,31 +531,31 @@ pub(crate) fn create_managed_session_handle(
     })
 }
 
-pub(crate) fn resolve_session_reference(
+pub fn resolve_session_reference(
     reference: &str,
 ) -> Result<SessionHandle, Box<dyn std::error::Error>> {
     let handle = current_session_store()?
         .resolve_reference(reference)
-        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)?;
+        .map_err(|error: SessionControlError| Box::new(error) as Box<dyn std::error::Error>)?;
     Ok(SessionHandle {
         id: handle.id,
         path: handle.path,
     })
 }
 
-pub(crate) fn resolve_managed_session_path(
+pub fn resolve_managed_session_path(
     session_id: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     current_session_store()?
         .resolve_managed_path(session_id)
-        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
+        .map_err(|error: SessionControlError| Box::new(error) as Box<dyn std::error::Error>)
 }
 
-pub(crate) fn list_managed_sessions(
+pub fn list_managed_sessions(
 ) -> Result<Vec<ManagedSessionSummary>, Box<dyn std::error::Error>> {
     Ok(current_session_store()?
         .list_sessions()
-        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)?
+        .map_err(|error: SessionControlError| Box::new(error) as Box<dyn std::error::Error>)?
         .into_iter()
         .map(|session| ManagedSessionSummary {
             id: session.id,
@@ -550,11 +568,11 @@ pub(crate) fn list_managed_sessions(
         .collect())
 }
 
-pub(crate) fn latest_managed_session() -> Result<ManagedSessionSummary, Box<dyn std::error::Error>>
+pub fn latest_managed_session() -> Result<ManagedSessionSummary, Box<dyn std::error::Error>>
 {
     let session = current_session_store()?
         .latest_session()
-        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)?;
+        .map_err(|error: SessionControlError| Box::new(error) as Box<dyn std::error::Error>)?;
     Ok(ManagedSessionSummary {
         id: session.id,
         path: session.path,
@@ -565,12 +583,12 @@ pub(crate) fn latest_managed_session() -> Result<ManagedSessionSummary, Box<dyn 
     })
 }
 
-pub(crate) fn load_session_reference(
+pub fn load_session_reference(
     reference: &str,
 ) -> Result<(SessionHandle, Session), Box<dyn std::error::Error>> {
     let loaded = current_session_store()?
         .load_session(reference)
-        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)?;
+        .map_err(|error: SessionControlError| Box::new(error) as Box<dyn std::error::Error>)?;
     Ok((
         SessionHandle {
             id: loaded.handle.id,
@@ -580,7 +598,7 @@ pub(crate) fn load_session_reference(
     ))
 }
 
-pub(crate) fn delete_managed_session(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+pub fn delete_managed_session(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if !path.exists() {
         return Err(format!("session file does not exist: {}", path.display()).into());
     }
@@ -588,7 +606,7 @@ pub(crate) fn delete_managed_session(path: &Path) -> Result<(), Box<dyn std::err
     Ok(())
 }
 
-pub(crate) fn confirm_session_deletion(session_id: &str) -> bool {
+pub fn confirm_session_deletion(session_id: &str) -> bool {
     print!("Delete session '{session_id}'? This cannot be undone. [y/N]: ");
     io::stdout().flush().unwrap_or(());
     let mut answer = String::new();
@@ -598,7 +616,7 @@ pub(crate) fn confirm_session_deletion(session_id: &str) -> bool {
     matches!(answer.trim(), "y" | "Y" | "yes" | "Yes" | "YES")
 }
 
-pub(crate) fn render_session_list(
+pub fn render_session_list(
     active_session_id: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let sessions = list_managed_sessions()?;
@@ -612,9 +630,9 @@ pub(crate) fn render_session_list(
     }
     for session in sessions {
         let marker = if session.id == active_session_id {
-            "● current"
+            "â— current"
         } else {
-            "○ saved"
+            "â—‹ saved"
         };
         let lineage = match (
             session.branch_name.as_deref(),
@@ -639,7 +657,7 @@ pub(crate) fn render_session_list(
     Ok(lines.join("\n"))
 }
 
-pub(crate) fn format_session_modified_age(modified_epoch_millis: u128) -> String {
+pub fn format_session_modified_age(modified_epoch_millis: u128) -> String {
     let now = std::time::SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .ok()
@@ -657,7 +675,7 @@ pub(crate) fn format_session_modified_age(modified_epoch_millis: u128) -> String
     }
 }
 
-pub(crate) fn write_session_clear_backup(
+pub fn write_session_clear_backup(
     session: &Session,
     session_path: &Path,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -666,7 +684,7 @@ pub(crate) fn write_session_clear_backup(
     Ok(backup_path)
 }
 
-pub(crate) fn session_clear_backup_path(session_path: &Path) -> PathBuf {
+pub fn session_clear_backup_path(session_path: &Path) -> PathBuf {
     let timestamp = std::time::SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .ok()

@@ -137,17 +137,29 @@ This plan covers a comprehensive analysis of the current terminal user interface
 | 5.3 | **Configurable spinner style** — Allow choosing between braille dots, bar, moon phases, etc. | S |
 | 5.4 | **Banner customization** — Make the ASCII art banner optional or configurable via settings | S |
 
-### Phase 6: Full-Screen TUI Mode (Stretch)
+### Phase 7: Security & Cryptography (Post-Quantum & Homomorphic)
 
-**Goal**: Optional alternate-screen layout for power users.
+**Goal**: Implement enterprise-grade privacy with PQC and investigate Homomorphic Encryption.
 
 | Task | Description | Effort |
 |---|---|---|
-| 6.1 | **Add `ratatui` dependency** — Introduce `ratatui` (terminal UI framework) as an optional dependency for the full-screen mode | S |
-| 6.2 | **Split-pane layout** — Top pane: conversation with scrollback; Bottom pane: input area; Right sidebar (optional): tool status/todo list | XL |
-| 6.3 | **Scrollable conversation view** — Navigate past messages with PgUp/PgDn, search within conversation | L |
-| 6.4 | **Keyboard shortcuts panel** — Show `?` help overlay with all keybindings | M |
-| 6.5 | **Mouse support** — Click to expand tool results, scroll conversation, select text for copy | L |
+| 7.1 | **Post-Quantum Key Exchange (ML-KEM)** — Integrate `fips203` or `pqcrypto-kyber` to enable ML-KEM (Kyber-768) based key encapsulation for session state and inter-agent communication | L |
+| 7.2 | **Zero-Knowledge Client-Side Encryption** — Ensure all session data is encrypted with a KEM-derived key before leaving the client. The server (Redis) must never hold unencrypted session content | L |
+| 7.3 | **Homomorphic Encryption (HE) Research** — Evaluate `tfhe-rs` for implementing encrypted search or privacy-preserving usage telemetry where the server computes on encrypted data without decryption | XL |
+| 7.4 | **Hardware Security Integration** — Add support for storing KEM seed material in system keystores (macOS Keychain, Windows Credential Manager, Linux Secret Service) | M |
+| 7.5 | **Encrypted Peer-to-Peer Handshake** — Implement the VaultWares PQC handshake protocol for client-to-client communication flows | L |
+
+---
+
+## 3. Security & Cryptography Guidelines
+
+To maintain the VaultWares privacy-first posture, all implementations must adhere to these strict rules:
+
+1. **Algorithm Choice**: **ML-KEM (Kyber)** is the mandatory standard for key encapsulation. Use Kyber-768 for general use and Kyber-1024 for high-security environments.
+2. **Client-Side Key Generation**: Private keys must be generated locally and never leave the client's memory/secure storage.
+3. **No Server-Side Decryption**: The server (Vault Central / Redis) must be treated as untrusted. It may store encrypted blobs but must never possess the keys to decrypt them.
+4. **Key Rotation**: Enforce mandatory KEM-based key rotation for every 24 hours of active session time or 10,000 messages.
+5. **Homomorphic Constraints**: When using HE, ensure the circuit depth is minimized to maintain TUI responsiveness. HE should be used for metadata and telemetry, not for the core message stream unless performance permits.
 
 ---
 

@@ -4,7 +4,7 @@ import time
 
 # Add root and submodule to path
 sys.path.append(os.getcwd())
-sys.path.append(os.path.join(os.getcwd(), "vaultwares_agentciation"))
+sys.path.append(os.path.join(os.getcwd(), "vaultwares-agentciation"))
 
 from ai_model import TextProcessor, ImageProcessor, VideoProcessor
 import importlib

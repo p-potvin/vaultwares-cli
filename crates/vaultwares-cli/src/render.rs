@@ -62,6 +62,54 @@ impl ColorTheme {
             spinner_failed: Color::Red,
         })
     }
+
+    pub fn space() -> Self {
+        Self {
+            heading: Color::Rgb { r: 139, g: 92, b: 246 }, // Violet
+            emphasis: Color::Rgb { r: 236, g: 72, b: 153 }, // Pink
+            strong: Color::Rgb { r: 59, g: 130, b: 246 }, // Blue
+            inline_code: Color::Rgb { r: 16, g: 185, b: 129 }, // Emerald
+            link: Color::Rgb { r: 96, g: 165, b: 250 }, // Sky
+            quote: Color::Rgb { r: 107, g: 114, b: 128 }, // Grey
+            table_border: Color::Rgb { r: 31, g: 41, b: 55 },
+            code_block_border: Color::Rgb { r: 55, g: 65, b: 81 },
+            spinner_active: Color::Rgb { r: 139, g: 92, b: 246 },
+            spinner_done: Color::Rgb { r: 52, g: 211, b: 153 },
+            spinner_failed: Color::Rgb { r: 248, g: 113, b: 113 },
+        }
+    }
+
+    pub fn neon() -> Self {
+        Self {
+            heading: Color::Rgb { r: 0, g: 255, b: 255 }, // Cyan
+            emphasis: Color::Rgb { r: 255, g: 0, b: 255 }, // Magenta
+            strong: Color::Rgb { r: 255, g: 255, b: 0 }, // Yellow
+            inline_code: Color::Rgb { r: 57, g: 255, b: 20 }, // Neon Green
+            link: Color::Rgb { r: 0, g: 112, b: 255 }, // Bright Blue
+            quote: Color::Rgb { r: 128, g: 128, b: 128 },
+            table_border: Color::Rgb { r: 0, g: 255, b: 255 },
+            code_block_border: Color::Rgb { r: 255, g: 0, b: 255 },
+            spinner_active: Color::Rgb { r: 0, g: 255, b: 255 },
+            spinner_done: Color::Rgb { r: 57, g: 255, b: 20 },
+            spinner_failed: Color::Rgb { r: 255, g: 49, b: 49 },
+        }
+    }
+
+    pub fn catppuccin() -> Self {
+        Self {
+            heading: Color::Rgb { r: 137, g: 180, b: 250 }, // Blue
+            emphasis: Color::Rgb { r: 245, g: 194, b: 231 }, // Pink
+            strong: Color::Rgb { r: 203, g: 166, b: 247 }, // Mauve
+            inline_code: Color::Rgb { r: 166, g: 227, b: 161 }, // Green
+            link: Color::Rgb { r: 137, g: 220, b: 235 }, // Sky
+            quote: Color::Rgb { r: 147, g: 153, b: 178 }, // Overlay
+            table_border: Color::Rgb { r: 88, g: 91, b: 112 }, // Surface
+            code_block_border: Color::Rgb { r: 88, g: 91, b: 112 },
+            spinner_active: Color::Rgb { r: 203, g: 166, b: 247 },
+            spinner_done: Color::Rgb { r: 166, g: 227, b: 161 },
+            spinner_failed: Color::Rgb { r: 243, g: 139, b: 168 }, // Red
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -269,8 +317,15 @@ impl TerminalRenderer {
 
     #[must_use]
     pub fn with_vaultwares_theme(mut self, slug: &str) -> Self {
-        if let Some(theme) = ColorTheme::from_vaultwares_theme(slug) {
-            self.color_theme = theme;
+        match slug {
+            "space" => self.color_theme = ColorTheme::space(),
+            "neon" => self.color_theme = ColorTheme::neon(),
+            "catppuccin" => self.color_theme = ColorTheme::catppuccin(),
+            other => {
+                if let Some(theme) = ColorTheme::from_vaultwares_theme(other) {
+                    self.color_theme = theme;
+                }
+            }
         }
         self
     }

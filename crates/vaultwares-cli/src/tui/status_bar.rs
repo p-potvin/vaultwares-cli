@@ -1,7 +1,7 @@
 use crate::*;
 
-#[derive(Debug, Clone)]
-pub(crate) struct StatusContext {
+#[derive(Debug, Clone, Default)]
+pub struct StatusContext {
     pub(crate) cwd: PathBuf,
     pub(crate) session_path: Option<PathBuf>,
     pub(crate) loaded_config_files: usize,
@@ -350,6 +350,205 @@ pub(crate) fn format_status_report(
     .join("\n\n")
 }
 
+/// How many rows the HUD occupies at the bottom of the terminal.
+/// Callers must reserve this many lines when computing scroll regions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HudHeight {
+    /// A two-row HUD (context row + usage row).
+    Double,
+    /// Collapsed to a single row (narrow terminals < 60 cols).
+    Single,
+}
+
+impl HudHeight {
+    pub(crate) fn rows(self) -> u16 {
+        match self {
+            Self::Double => 2,
+            Self::Single => 1,
+        }
+    }
+}
+
+/// Render the HUD at the bottom of the terminal.
+///
+/// Returns the [`HudHeight`] that was actually drawn so callers can adjust
+/// scroll-region reservations without an extra `terminal::size()` call.
+pub(crate) fn draw_hud(
+    model: &str,
+    permission_mode: &str,
+    usage: StatusUsage,
+    context: &StatusContext,
+) -> io::Result<HudHeight> {
+    use crossterm::{
+        cursor,
+        style::{self, Color, Stylize},
+        terminal::{self, ClearType},
+        QueueableCommand,
+    };
+    use std::io::stdout;
+
+    let (width, height) = terminal::size().unwrap_or((80, 24));
+    let mut out = stdout();
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+    /// Pad / truncate a string to exactly `w` *display* columns.
+    fn fit(s: &str, w: usize) -> String {
+        let chars: Vec<char> = s.chars().collect();
+        if chars.len() >= w {
+            chars.into_iter().take(w).collect()
+        } else {
+            format!("{s:<width$}", width = w)
+        }
+    }
+
+    // ── data extraction ───────────────────────────────────────────────────────
+    let session_id = context
+        .session_path
+        .as_ref()
+        .and_then(|p| p.file_stem())
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "live".to_string());
+
+    // Shorten UUID-style session IDs to the first 8 chars for the HUD.
+    let session_short = if session_id.len() > 12 {
+        format!("{}…", &session_id[..8])
+    } else {
+        session_id.clone()
+    };
+
+    let branch = context.git_branch.as_deref().unwrap_or("—");
+    let git_dirty = if context.git_summary.is_clean() {
+        "✓".to_string()
+    } else {
+        format!("~{}", context.git_summary.changed_files)
+    };
+
+    let pricing = pricing_for_model(model).unwrap_or_else(ModelPricing::default_sonnet_tier);
+    let cost = usage.cumulative.estimate_cost_usd_with_pricing(pricing);
+    let cost_str = format_usd(cost.total_cost_usd());
+
+    let w = width as usize;
+
+    // ── narrow / single-row fallback ─────────────────────────────────────────
+    if w < 60 {
+        let line = fit(
+            &format!(
+                " {} │ {} │ {} │ in:{} out:{} {}",
+                model,
+                permission_mode,
+                session_short,
+                usage.cumulative.input_tokens,
+                usage.cumulative.output_tokens,
+                cost_str,
+            ),
+            w,
+        );
+        out.queue(cursor::SavePosition)?;
+        out.queue(cursor::Hide)?;
+        out.queue(cursor::MoveTo(0, height.saturating_sub(1)))?;
+        out.queue(terminal::Clear(ClearType::CurrentLine))?;
+        out.queue(style::PrintStyledContent(
+            line.with(Color::Black).on(Color::DarkCyan).bold(),
+        ))?;
+        out.queue(cursor::Show)?;
+        out.queue(cursor::RestorePosition)?;
+        out.flush()?;
+        return Ok(HudHeight::Single);
+    }
+
+    // ── dual-row HUD ─────────────────────────────────────────────────────────
+    //
+    // Row 1  (context): CLAW │ model │ permission │ session │  branch  git
+    // Row 2  (usage  ): turns │ msgs │ in:N out:N │ est:N │  cost  │ sandbox
+
+    // -- row 1 --
+    let perm_icon = match permission_mode {
+        "bypassPermissions" | "dangerFullAccess" => "⚡",
+        "readOnly"           => "👁",
+        _                    => "✏",
+    };
+    let sandbox_icon = if context.sandbox_status.active { "🔒" } else { "  " };
+
+    let row1 = fit(
+        &format!(
+            "  CLAW  │  {}  │  {} {}  │  session: {}  │  {} {}  {}",
+            model,
+            perm_icon,
+            permission_mode,
+            session_short,
+            branch,
+            git_dirty,
+            sandbox_icon,
+        ),
+        w,
+    );
+
+    // -- row 2 --
+    let row2 = fit(
+        &format!(
+            "  turns: {} │ msgs: {} │ in: {} out: {} cache: {} │ est: {} tok │ {}",
+            usage.turns,
+            usage.message_count,
+            usage.cumulative.input_tokens,
+            usage.cumulative.output_tokens,
+            usage.cumulative.cache_creation_input_tokens
+                + usage.cumulative.cache_read_input_tokens,
+            usage.estimated_tokens,
+            cost_str,
+        ),
+        w,
+    );
+
+    let row1_y = height.saturating_sub(2);
+    let row2_y = height.saturating_sub(1);
+
+    out.queue(cursor::SavePosition)?;
+    out.queue(cursor::Hide)?;
+
+    // Row 1 — dark navy + bright white text
+    out.queue(cursor::MoveTo(0, row1_y))?;
+    out.queue(terminal::Clear(ClearType::CurrentLine))?;
+    out.queue(style::PrintStyledContent(
+        row1.with(Color::White)
+            .on(Color::Rgb { r: 15, g: 23, b: 42 })
+            .bold(),
+    ))?;
+
+    // Row 2 — slightly lighter slate, dimmer text
+    out.queue(cursor::MoveTo(0, row2_y))?;
+    out.queue(terminal::Clear(ClearType::CurrentLine))?;
+    out.queue(style::PrintStyledContent(
+        row2.with(Color::Rgb { r: 148, g: 163, b: 184 })
+            .on(Color::Rgb { r: 30, g: 41, b: 59 }),
+    ))?;
+
+    out.queue(cursor::Show)?;
+    out.queue(cursor::RestorePosition)?;
+    out.flush()?;
+
+    Ok(HudHeight::Double)
+}
+
+pub(crate) fn clear_hud() -> io::Result<()> {
+    use crossterm::{cursor, terminal::{self, ClearType}, QueueableCommand};
+    use std::io::stdout;
+
+    let (_, height) = terminal::size().unwrap_or((80, 24));
+    let mut out = stdout();
+
+    out.queue(cursor::SavePosition)?;
+    // Clear both potential rows
+    out.queue(cursor::MoveTo(0, height.saturating_sub(2)))?;
+    out.queue(terminal::Clear(ClearType::CurrentLine))?;
+    out.queue(cursor::MoveTo(0, height.saturating_sub(1)))?;
+    out.queue(terminal::Clear(ClearType::CurrentLine))?;
+    out.queue(cursor::RestorePosition)?;
+    out.flush()?;
+
+    Ok(())
+}
+
+
 pub(crate) fn format_turn_footer(
     model: &str,
     permission_mode: &str,
@@ -486,4 +685,98 @@ pub(crate) fn sandbox_json_value(status: &runtime::SandboxStatus) -> serde_json:
         "markers": status.container_markers,
         "fallback_reason": status.fallback_reason,
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HudAnimator — background braille-spinner pulsing the HUD row-2 activity dot
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BRAILLE_FRAMES: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+/// Manages a background thread that pulses an animated activity indicator in
+/// the HUD row 2 while a turn is running.  Drop (or call `.stop()`) to halt.
+pub(crate) struct HudAnimator {
+    stop_tx: Option<std::sync::mpsc::SyncSender<()>>,
+    join_handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl HudAnimator {
+    /// Start the animator.  `label` is a short description shown next to the
+    /// spinner (e.g. `"thinking"`).
+    pub(crate) fn start(label: impl Into<String>) -> Self {
+        use crossterm::{
+            cursor,
+            style::{self, Color, Stylize},
+            terminal,
+            QueueableCommand,
+        };
+        use std::io::{stdout, Write};
+
+        let label = label.into();
+        let (stop_tx, stop_rx) = std::sync::mpsc::sync_channel::<()>(1);
+
+        let handle = std::thread::spawn(move || {
+            let mut frame_idx: usize = 0;
+            loop {
+                // Check for stop signal (non-blocking)
+                if stop_rx.try_recv().is_ok() {
+                    break;
+                }
+
+                let spinner_char = BRAILLE_FRAMES[frame_idx % BRAILLE_FRAMES.len()];
+                let indicator = format!("  {} {} …", spinner_char, label);
+
+                if let Ok((width, height)) = terminal::size() {
+                    let w = width as usize;
+                    let row2_y = height.saturating_sub(1);
+                    let padded = if indicator.len() < w {
+                        format!("{indicator:<width$}", width = w)
+                    } else {
+                        indicator.chars().take(w).collect::<String>()
+                    };
+                    let mut out = stdout();
+                    let _ = out.queue(cursor::SavePosition);
+                    let _ = out.queue(cursor::Hide);
+                    let _ = out.queue(cursor::MoveTo(0, row2_y));
+                    let _ = out.queue(style::PrintStyledContent(
+                        padded
+                            .with(Color::Rgb { r: 250, g: 204, b: 21 }) // amber
+                            .on(Color::Rgb { r: 30, g: 41, b: 59 }),
+                    ));
+                    let _ = out.queue(cursor::Show);
+                    let _ = out.queue(cursor::RestorePosition);
+                    let _ = out.flush();
+                }
+
+                frame_idx = frame_idx.wrapping_add(1);
+                std::thread::sleep(Duration::from_millis(80));
+            }
+        });
+
+        Self {
+            stop_tx: Some(stop_tx),
+            join_handle: Some(handle),
+        }
+    }
+
+    /// Stop the animator and join the thread.
+    pub(crate) fn stop(mut self) {
+        if let Some(tx) = self.stop_tx.take() {
+            let _ = tx.try_send(());
+        }
+        if let Some(h) = self.join_handle.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+impl Drop for HudAnimator {
+    fn drop(&mut self) {
+        if let Some(tx) = self.stop_tx.take() {
+            let _ = tx.try_send(());
+        }
+        if let Some(h) = self.join_handle.take() {
+            let _ = h.join();
+        }
+    }
 }

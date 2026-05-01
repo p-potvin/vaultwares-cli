@@ -50,6 +50,7 @@ pub const DEFAULT_THEMES: &[VaultTheme] = &[
     },
 ];
 
+#[must_use] 
 pub fn default_palettes() -> Vec<ThemePalette> {
     vec![
         ThemePalette {

@@ -65,6 +65,7 @@ pub struct RuntimeFeatureConfig {
     sandbox: SandboxConfig,
     provider_fallbacks: ProviderFallbackConfig,
     trusted_roots: Vec<String>,
+    theme: Option<String>,
 }
 
 /// Ordered chain of fallback model identifiers used when the primary
@@ -315,6 +316,7 @@ impl ConfigLoader {
             sandbox: parse_optional_sandbox_config(&merged_value)?,
             provider_fallbacks: parse_optional_provider_fallbacks(&merged_value)?,
             trusted_roots: parse_optional_trusted_roots(&merged_value)?,
+            theme: parse_optional_theme(&merged_value),
         };
 
         Ok(RuntimeConfig {
@@ -414,6 +416,11 @@ impl RuntimeConfig {
     pub fn trusted_roots(&self) -> &[String] {
         &self.feature_config.trusted_roots
     }
+
+    #[must_use]
+    pub fn theme(&self) -> Option<&str> {
+        self.feature_config.theme.as_deref()
+    }
 }
 
 impl RuntimeFeatureConfig {
@@ -482,6 +489,11 @@ impl RuntimeFeatureConfig {
     #[must_use]
     pub fn trusted_roots(&self) -> &[String] {
         &self.trusted_roots
+    }
+
+    #[must_use]
+    pub fn theme(&self) -> Option<&str> {
+        self.theme.as_deref()
     }
 }
 
@@ -736,6 +748,13 @@ fn merge_mcp_servers(
 fn parse_optional_model(root: &JsonValue) -> Option<String> {
     root.as_object()
         .and_then(|object| object.get("model"))
+        .and_then(JsonValue::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn parse_optional_theme(root: &JsonValue) -> Option<String> {
+    root.as_object()
+        .and_then(|object| object.get("theme"))
         .and_then(JsonValue::as_str)
         .map(ToOwned::to_owned)
 }
