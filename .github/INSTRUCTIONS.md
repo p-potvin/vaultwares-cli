@@ -25,7 +25,7 @@ The stack varies by project type. Choose the appropriate tier below.
 | State — server | TanStack Query (React Query) |
 | State — client | Zustand (for non-trivial local state), React Context for simple cases |
 | UI Primitives | Radix UI + Shadcn UI patterns |
-| Glass effects | VaultWares `glass-ui` library (use in small doses) |
+| Glass effects | VaultWares `vaultwares-glass` library (use in small doses) |
 | Validation | Zod — for all API inputs, form data, and external responses |
 | Icons | Lucide React |
 | i18n | react-i18next (English + French at minimum) |

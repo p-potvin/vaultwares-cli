@@ -60,9 +60,9 @@ Use these skins when an app supports multiple themes. Format: `[mode] | [primary
 
 ---
 
-## 💎 Glassmorphism (glass-ui)
+## 💎 Glassmorphism (vaultwares-glass)
 
-Use the [glass-ui library](https://github.com/p-potvin/glass-ui) for glassmorphism effects. Apply in small doses:
+Use the [vaultwares-glass library](https://github.com/p-potvin/vaultwares-glass) for glassmorphism effects. Apply in small doses:
 
 - **Good uses:** Floating modals, nav bars over hero images, info cards on rich backgrounds, tooltips.
 - **Avoid:** Using glass on every surface — it loses impact and hurts readability.
