@@ -38,7 +38,7 @@
   5b [ ] Wire `Config` tool's theme setting to TUI rendering
   5c [ ] Add subtle micro-animations/transitions for HUD updates
   5d [ ] Implement contrast checking for all theme variants
-  5e [ ] Sync theme tokens with `vault-themes` submodule rules
+  5e [ ] Sync theme tokens with `vaultwares-themes` submodule rules
 
 ## 4 Post-Quantum Security & Privacy (Enterprise)
 
@@ -59,7 +59,7 @@
 ## 5 Security Audit & Penetration Testing
 
 9 [~] Comprehensive Security Audit
-  9a [ ] Perform static analysis on `vaultwares-cli` and `vaultwares-agentciation`
+  9a [ ] Perform static analysis on `vaultwares-cli` and `vaultwares-adk`
   9b [ ] Audit PQC integration against known vulnerability vectors
   9c [ ] Review `vaultwares-fhe` implementation for side-channel resistance
   9d [ ] Penetration test the Redis pub/sub mechanism in Multi-Agent workflows

@@ -5,7 +5,7 @@
 This repository implements a Redis-based multi-agent coordination system.
 All agents inherit from `ExtrovertAgent` and are overseen by `LonelyManager`.
 
-### Core Framework (`vaultwares-agentciation/`)
+### Core Framework (`vaultwares-adk/`)
 
 | Component | File | Description |
 |---|---|---|
@@ -30,9 +30,9 @@ All agents inherit from `ExtrovertAgent` and are overseen by `LonelyManager`.
 - **`agent_image.md`** — Image agent skills, task types, and dispatch examples
 - **`agent_video.md`** — Video agent skills, task types, and dispatch examples
 - **`agent_workflow.md`** — Workflow agent skills, task types, and dispatch examples
-- **`vaultwares-agentciation/skills.md`** — Full skills reference for all Extrovert agents
-- **`vaultwares-agentciation/extrovert.agent.md`** — Extrovert personality, Redis rules, status enum
-- **`vaultwares-agentciation/lonely-manager.agent.md`** — Manager responsibilities and behaviors
+- **`vaultwares-adk/skills.md`** — Full skills reference for all Extrovert agents
+- **`vaultwares-adk/extrovert.agent.md`** — Extrovert personality, Redis rules, status enum
+- **`vaultwares-adk/lonely-manager.agent.md`** — Manager responsibilities and behaviors
 
 ## Redis Coordination
 
@@ -71,7 +71,7 @@ The system uses Redis pub/sub for real-time agent coordination:
 pip install redis
 
 # 2. Start Redis
-redis-server vaultwares-agentciation/redis.conf
+redis-server vaultwares-adk/redis.conf
 
 # 3. Run the full system
 python run_coordinated_system.py
@@ -85,4 +85,4 @@ python run_worker_agent.py --type image --id image-agent-1 &
 ## Rules & Compliance
 
 All agents follow VaultWares privacy-first, security-second, and functionality-third guidelines.
-See `vaultwares-agentciation/skills.md` for the full rigid rules for Extrovert agents.
+See `vaultwares-adk/skills.md` for the full rigid rules for Extrovert agents.

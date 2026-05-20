@@ -1,19 +1,8 @@
-<!-- VAULT-THEMES-SUBMODULE:START -->
-## Vault Themes Submodule Rules
+# VaultWares — pre-instructions (repo stub)
+This file is intentionally short. It routes work to the company protocol TOC.
+Always start at: `C:\Users\Administrator\Desktop\Github Repos\vaultwares-docs\instructions\ROUTER.md`
+Execute the ROUTER routine first (always): scan all protocol categories end-to-end, select relevant categories, then open only the selected summaries in category order.
+Execute other routines only when relevant (tools/routines). Ledger is always the last step before replying.
+Read full notes only when explicitly prompted: `read full notes`
+Mandatory ledger (last step before replying): use `C:\Users\Administrator\Desktop\Github Repos\agent-ledger\scripts\record-agent-change.ps1`
 
-This repository includes `vault-themes`. Before changing UI, branding, design
-systems, theme tokens, shared components, authentication UX, encrypted
-client-to-client communication UX, Figma-derived implementation, or agent/IDE
-instructions, read these stable root files:
-
-- `vault-themes/AGENTS.md`
-- `vault-themes/CONTEXT.md`
-
-When the submodule has the cleaned layout, also read:
-
-- `vault-themes/brand/brand-guide.md`
-- `vault-themes/brand/tokens/tokens.ts`
-
-Treat `vault-themes` as the shared VaultWares source of truth. Do not copy its
-rules into this repo unless a tool-specific file requires a short pointer.
-<!-- VAULT-THEMES-SUBMODULE:END -->
